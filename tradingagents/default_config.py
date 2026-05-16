@@ -82,6 +82,7 @@ DEFAULT_CONFIG = _apply_env_overrides({
     "global_news_lookback_days": 7,       # macro news lookback window
     # Search queries used by get_global_news for macro headlines. Extend or
     # replace to broaden geographic / sector coverage.
+    # When using akshare, replace with Chinese-language queries.
     "global_news_queries": [
         "Federal Reserve interest rates inflation",
         "S&P 500 earnings GDP economic outlook",
@@ -91,15 +92,16 @@ DEFAULT_CONFIG = _apply_env_overrides({
     ],
     # Data vendor configuration
     # Category-level configuration (default for all tools in category)
+    # Set to "akshare" for A-share mode.
     "data_vendors": {
-        "core_stock_apis": "yfinance",       # Options: alpha_vantage, yfinance
-        "technical_indicators": "yfinance",  # Options: alpha_vantage, yfinance
-        "fundamental_data": "yfinance",      # Options: alpha_vantage, yfinance
-        "news_data": "yfinance",             # Options: alpha_vantage, yfinance
+        "core_stock_apis": "yfinance",       # Options: alpha_vantage, yfinance, akshare
+        "technical_indicators": "yfinance",  # Options: alpha_vantage, yfinance, akshare
+        "fundamental_data": "yfinance",      # Options: alpha_vantage, yfinance, akshare
+        "news_data": "yfinance",             # Options: alpha_vantage, yfinance, akshare
     },
     # Tool-level configuration (takes precedence over category-level)
     "tool_vendors": {
-        # Example: "get_stock_data": "alpha_vantage",  # Override category default
+        # Example: "get_stock_data": "akshare",  # Override category default
     },
     # Benchmark for alpha calculation in the reflection layer.
     # ``benchmark_ticker`` (when set) overrides the suffix map for all
@@ -116,6 +118,8 @@ DEFAULT_CONFIG = _apply_env_overrides({
         ".L":   "^FTSE",    # London (FTSE 100)
         ".TO":  "^GSPTSE",  # Toronto (TSX Composite)
         ".AX":  "^AXJO",    # Australia (ASX 200)
+        ".SH":  "000300",   # Shanghai → CSI 300 (沪深300)
+        ".SZ":  "000300",   # Shenzhen → CSI 300 (沪深300)
         "":     "SPY",      # default for US-listed tickers (no suffix)
     },
 })

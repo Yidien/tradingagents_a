@@ -51,15 +51,85 @@ def load_ohlcv(symbol: str, curr_date: str) -> pd.DataFrame:
     Downloads 15 years of data up to today and caches per symbol. On
     subsequent calls the cache is reused. Rows after curr_date are
     filtered out so backtests never see future prices.
+
+    A-share tickers (6-digit codes) are fetched via akshare; everything
+    else uses yfinance.
     """
-    # Reject ticker values that would escape the cache directory when
-    # interpolated into the cache filename (e.g. ``../../tmp/x``).
+    if _is_a_share_code(symbol):
+        return _load_ohlcv_akshare(symbol, curr_date)
+    return _load_ohlcv_yfinance(symbol, curr_date)
+
+
+def _is_a_share_code(symbol: str) -> bool:
+    """Return True if *symbol* looks like an A-share ticker code."""
+    code = symbol.upper().strip()
+    if code.endswith(".SH") or code.endswith(".SZ"):
+        return True
+    return code.isdigit() and len(code) == 6
+
+
+def _load_ohlcv_akshare(symbol: str, curr_date: str) -> pd.DataFrame:
+    """Fetch OHLCV from akshare for A-share tickers."""
+    import akshare as ak
+    from dateutil.relativedelta import relativedelta
+
+    code = symbol.upper().strip()
+    if code.endswith(".SH") or code.endswith(".SZ"):
+        code = code[:6]
+
+    safe_symbol = safe_ticker_component(code)
+    config = get_config()
+    curr_date_dt = pd.to_datetime(curr_date)
+    today_date = pd.Timestamp.today()
+
+    os.makedirs(config["data_cache_dir"], exist_ok=True)
+    data_file = os.path.join(
+        config["data_cache_dir"],
+        f"{safe_symbol}-akshare-ohlcv.csv",
+    )
+
+    if os.path.exists(data_file):
+        data = pd.read_csv(data_file, encoding="utf-8")
+    else:
+        end_str = today_date.strftime("%Y%m%d")
+        start_str = (today_date - pd.DateOffset(years=10)).strftime("%Y%m%d")
+        try:
+            df = ak.stock_zh_a_hist(
+                symbol=code, period="daily",
+                start_date=start_str, end_date=end_str, adjust="qfq",
+            )
+        except Exception:
+            logger.warning("akshare 10y fetch failed for %s, trying 3y", code)
+            start_str = (today_date - pd.DateOffset(years=3)).strftime("%Y%m%d")
+            df = ak.stock_zh_a_hist(
+                symbol=code, period="daily",
+                start_date=start_str, end_date=end_str, adjust="qfq",
+            )
+
+        col_map = {
+            "日期": "Date", "开盘": "Open", "最高": "High",
+            "最低": "Low", "收盘": "Close", "成交量": "Volume",
+        }
+        df = df.rename(columns={k: v for k, v in col_map.items() if k in df.columns})
+        for col in ("Open", "High", "Low", "Close", "Volume"):
+            if col not in df.columns:
+                df[col] = pd.NA
+
+        data = df[["Date", "Open", "High", "Low", "Close", "Volume"]].copy()
+        data.to_csv(data_file, index=False, encoding="utf-8")
+
+    data = _clean_dataframe(data)
+    data = data[data["Date"] <= curr_date_dt]
+    return data
+
+
+def _load_ohlcv_yfinance(symbol: str, curr_date: str) -> pd.DataFrame:
+    """Fetch OHLCV from yfinance (original implementation)."""
     safe_symbol = safe_ticker_component(symbol)
 
     config = get_config()
     curr_date_dt = pd.to_datetime(curr_date)
 
-    # Cache uses a fixed window (15y to today) so one file per symbol
     today_date = pd.Timestamp.today()
     start_date = today_date - pd.DateOffset(years=5)
     start_str = start_date.strftime("%Y-%m-%d")
@@ -86,10 +156,7 @@ def load_ohlcv(symbol: str, curr_date: str) -> pd.DataFrame:
         data.to_csv(data_file, index=False, encoding="utf-8")
 
     data = _clean_dataframe(data)
-
-    # Filter to curr_date to prevent look-ahead bias in backtesting
     data = data[data["Date"] <= curr_date_dt]
-
     return data
 
 

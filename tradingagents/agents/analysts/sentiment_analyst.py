@@ -29,10 +29,19 @@ from tradingagents.agents.utils.agent_utils import (
 )
 from tradingagents.dataflows.reddit import fetch_reddit_posts
 from tradingagents.dataflows.stocktwits import fetch_stocktwits_messages
+from tradingagents.dataflows.akshare_sentiment import fetch_akshare_sentiment, fetch_akshare_stock_bar
 
 
 def _seven_days_back(trade_date: str) -> str:
     return (datetime.strptime(trade_date, "%Y-%m-%d") - timedelta(days=7)).strftime("%Y-%m-%d")
+
+
+def _is_a_share_ticker(ticker: str) -> bool:
+    """Return True if *ticker* is an A-share (Shanghai/Shenzhen) code."""
+    code = ticker.upper().strip()
+    if code.endswith(".SH") or code.endswith(".SZ"):
+        return True
+    return code.isdigit() and len(code) == 6
 
 
 def create_sentiment_analyst(llm):
@@ -49,12 +58,19 @@ def create_sentiment_analyst(llm):
         start_date = _seven_days_back(end_date)
         instrument_context = build_instrument_context(ticker)
 
-        # Pre-fetch all three sources. Each fetcher degrades gracefully and
+        # Pre-fetch all sources. Each fetcher degrades gracefully and
         # returns a string (no exceptions surface from here), so the LLM
         # always sees something — either real data or a clear placeholder.
         news_block = get_news.func(ticker, start_date, end_date)
-        stocktwits_block = fetch_stocktwits_messages(ticker, limit=30)
-        reddit_block = fetch_reddit_posts(ticker)
+
+        # Use A-share sentiment sources for Chinese stocks; fall back to
+        # US community sources for everything else.
+        if _is_a_share_ticker(ticker):
+            stocktwits_block = fetch_akshare_stock_bar(ticker, limit=30)
+            reddit_block = fetch_akshare_sentiment(ticker, limit=30)
+        else:
+            stocktwits_block = fetch_stocktwits_messages(ticker, limit=30)
+            reddit_block = fetch_reddit_posts(ticker)
 
         system_message = _build_system_message(
             ticker=ticker,
@@ -63,6 +79,7 @@ def create_sentiment_analyst(llm):
             news_block=news_block,
             stocktwits_block=stocktwits_block,
             reddit_block=reddit_block,
+            is_a_share=_is_a_share_ticker(ticker),
         )
 
         prompt = ChatPromptTemplate.from_messages(
@@ -104,8 +121,37 @@ def _build_system_message(
     news_block: str,
     stocktwits_block: str,
     reddit_block: str,
+    is_a_share: bool = False,
 ) -> str:
     """Assemble the sentiment-analyst system message with structured data blocks."""
+    if is_a_share:
+        return _build_a_share_system_message(
+            ticker=ticker,
+            start_date=start_date,
+            end_date=end_date,
+            news_block=news_block,
+            stocktwits_block=stocktwits_block,
+            reddit_block=reddit_block,
+        )
+    return _build_us_system_message(
+        ticker=ticker,
+        start_date=start_date,
+        end_date=end_date,
+        news_block=news_block,
+        stocktwits_block=stocktwits_block,
+        reddit_block=reddit_block,
+    )
+
+
+def _build_us_system_message(
+    *,
+    ticker: str,
+    start_date: str,
+    end_date: str,
+    news_block: str,
+    stocktwits_block: str,
+    reddit_block: str,
+) -> str:
     return f"""You are a financial market sentiment analyst. Your task is to produce a comprehensive sentiment report for {ticker} covering the period from {start_date} to {end_date}, drawing on three complementary data sources that have already been collected for you.
 
 ## Data sources (pre-fetched, in this prompt)
@@ -155,6 +201,72 @@ Produce a sentiment report covering, in order:
 
 1. **Overall sentiment direction** — Bullish / Bearish / Neutral / Mixed — with a brief confidence note based on data quality and sample size.
 2. **Source-by-source breakdown** — what each of news / StockTwits / Reddit is telling you, with specific evidence (cite message counts, ratios, notable posts).
+3. **Divergences, alignments, and key narratives** across sources.
+4. **Catalysts and risks** surfaced by the data.
+5. **Markdown table** at the end summarizing key sentiment signals, their direction, source, and supporting evidence.
+
+{get_language_instruction()}"""
+
+
+def _build_a_share_system_message(
+    *,
+    ticker: str,
+    start_date: str,
+    end_date: str,
+    news_block: str,
+    stocktwits_block: str,
+    reddit_block: str,
+) -> str:
+    """A-share version of the sentiment system message — uses Chinese retail platforms."""
+    return f"""You are a financial market sentiment analyst focusing on China A-share stocks. Your task is to produce a comprehensive sentiment report for {ticker} covering the period from {start_date} to {end_date}, drawing on three complementary data sources that have already been collected for you.
+
+## Data sources (pre-fetched, in this prompt)
+
+### News headlines — East Money / financial media, past 7 days
+Institutional and media framing. Fact-driven, slower-moving signal.
+
+<start_of_news>
+{news_block}
+<end_of_news>
+
+### East Money Stock Bar (东方财富股吧) — retail-trader posts
+Fast-moving signal. Each post is labeled with a derived sentiment tag (Bullish / Bearish / 中性) based on keyword analysis plus the post body. Like and comment counts indicate engagement.
+
+<start_of_stocktwits>
+{stocktwits_block}
+<end_of_stocktwits>
+
+### Xueqiu (雪球) + East Money Stock Bar — community discussion (past 7 days)
+Community discussion. Engagement signal via like count and comment count. Posts from East Money stock bar (股吧) tend to be more short-term and emotional; Xueqiu (雪球) posts tend to be more analytical.
+
+<start_of_reddit>
+{reddit_block}
+<end_of_reddit>
+
+## How to analyze this data (best practices)
+
+1. **Read the East Money Bullish/Bearish ratio as a leading retail-sentiment signal.** A 70/30 bullish/bearish split is moderately bullish; >=90/10 may indicate over-extension and contrarian risk; 50/50 is uncertainty. Sample size matters -- base rates on the actual message count, not percentages alone.
+
+2. **Look for cross-source divergences.** If news framing is bearish but retail forums are overwhelmingly bullish, that mismatch is itself a signal -- it can mean retail is leaning into a thesis the news flow hasn't caught up to (or vice versa).
+
+3. **Weight posts by engagement.** A post with many likes and comments reflects community attention; a post with 0 engagement is noise. Read the body excerpts for context.
+
+4. **Distinguish opinion from event.** A news headline about company earnings or policy change is an event; a stock bar post ("this stock is going to moon") is opinion. Both are inputs but should be weighted differently.
+
+5. **Identify recurring narrative themes.** What topic keeps coming up across sources? That's the dominant narrative driving current sentiment.
+
+6. **Be honest about data limits.** If any source returned only a handful of messages or an "<unavailable>" placeholder, flag this explicitly.
+
+7. **A-share-specific considerations:** A-share markets are influenced by policy announcements, regulatory changes, and the macroeconomic environment more heavily than US markets. Weigh policy and regulatory signals accordingly.
+
+8. **Past sentiment is not predictive.** Frame your conclusions as signal for the trader to weigh alongside fundamentals and technicals, not as a price call.
+
+## Output
+
+Produce a sentiment report covering, in order:
+
+1. **Overall sentiment direction** -- Bullish / Bearish / Neutral / Mixed -- with a brief confidence note based on data quality and sample size.
+2. **Source-by-source breakdown** -- what each of news / stock bar / community discussion is telling you, with specific evidence.
 3. **Divergences, alignments, and key narratives** across sources.
 4. **Catalysts and risks** surfaced by the data.
 5. **Markdown table** at the end summarizing key sentiment signals, their direction, source, and supporting evidence.
