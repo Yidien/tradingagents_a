@@ -8,6 +8,7 @@ from dateutil.relativedelta import relativedelta
 
 from .config import get_config
 from .stockstats_utils import yf_retry
+from .utils import parse_date
 
 
 def _extract_article_data(article: dict) -> dict:
@@ -76,8 +77,8 @@ def get_news_yfinance(
             return f"No news found for {ticker}"
 
         # Parse date range for filtering
-        start_dt = datetime.strptime(start_date, "%Y-%m-%d")
-        end_dt = datetime.strptime(end_date, "%Y-%m-%d")
+        start_dt = parse_date(start_date)
+        end_dt = parse_date(end_date)
 
         news_str = ""
         filtered_count = 0
@@ -165,7 +166,7 @@ def get_global_news_yfinance(
             return f"No global news found for {curr_date}"
 
         # Calculate date range
-        curr_dt = datetime.strptime(curr_date, "%Y-%m-%d")
+        curr_dt = parse_date(curr_date)
         start_dt = curr_dt - relativedelta(days=look_back_days)
         start_date = start_dt.strftime("%Y-%m-%d")
 

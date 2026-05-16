@@ -47,6 +47,18 @@ def save_output(data: pd.DataFrame, tag: str, save_path: SavePathType = None) ->
         print(f"{tag} saved to {save_path}")
 
 
+def parse_date(date_str: str) -> datetime:
+    """将日期字符串解析为 datetime，兼容 YYYY-MM-DD 和 YYYYMMDD 两种格式。
+
+    LLM 在调用工具时可能输出去掉中划线的日期（如 20250101），
+    此函数对两种格式均做容错处理。
+    """
+    s = date_str.strip()
+    if len(s) == 8 and s.isdigit():
+        return datetime.strptime(s, "%Y%m%d")
+    return datetime.strptime(s, "%Y-%m-%d")
+
+
 def get_current_date():
     return date.today().strftime("%Y-%m-%d")
 

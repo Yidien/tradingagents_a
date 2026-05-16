@@ -1,4 +1,5 @@
 from .alpha_vantage_common import _make_api_request
+from .utils import parse_date
 
 def get_indicator(
     symbol: str,
@@ -62,7 +63,7 @@ def get_indicator(
             f"Indicator {indicator} is not supported. Please choose from: {list(supported_indicators.keys())}"
         )
 
-    curr_date_dt = datetime.strptime(curr_date, "%Y-%m-%d")
+    curr_date_dt = parse_date(curr_date)
     before = curr_date_dt - relativedelta(days=look_back_days)
 
     # Get the full data for the period instead of making individual calls
@@ -189,7 +190,7 @@ def get_indicator(
                 try:
                     date_str = values[date_col_idx].strip()
                     # Parse the date
-                    date_dt = datetime.strptime(date_str, "%Y-%m-%d")
+                    date_dt = parse_date(date_str)
 
                     # Check if date is in our range
                     if before <= date_dt <= curr_date_dt:

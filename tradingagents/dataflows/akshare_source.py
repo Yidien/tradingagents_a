@@ -20,6 +20,7 @@ from .stockstats_utils import (
     _clean_dataframe,
     filter_financials_by_date,
 )
+from .utils import parse_date
 from .config import get_config
 
 logger = logging.getLogger(__name__)
@@ -89,8 +90,11 @@ def get_akshare_data_online(
     Signature mirrors :func:`y_finance.get_YFin_data_online` exactly so
     ``interface.py`` can route here via ``VENDOR_METHODS``.
     """
-    datetime.strptime(start_date, "%Y-%m-%d")
-    datetime.strptime(end_date, "%Y-%m-%d")
+    # 容错处理：LLM 可能传 YYYYMMDD 格式
+    parse_date(start_date)
+    parse_date(end_date)
+    start_date = parse_date(start_date).strftime("%Y-%m-%d")
+    end_date = parse_date(end_date).strftime("%Y-%m-%d")
 
     code = _normalise_ticker(symbol)
 
@@ -189,7 +193,7 @@ def get_stock_stats_indicators_akshare(
         )
 
     end_date = curr_date
-    curr_date_dt = datetime.strptime(curr_date, "%Y-%m-%d")
+    curr_date_dt = parse_date(curr_date)
     before = curr_date_dt - relativedelta(days=look_back_days)
 
     try:
@@ -212,7 +216,7 @@ def get_stock_stats_indicators_akshare(
         logger.warning("Bulk stockstats with akshare failed: %s", e)
         # Fallback — try individual lookups
         ind_string = ""
-        cur = datetime.strptime(curr_date, "%Y-%m-%d")
+        cur = parse_date(curr_date)
         while cur >= before:
             try:
                 v = StockstatsUtils.get_stock_stats(symbol, indicator, cur.strftime("%Y-%m-%d"))

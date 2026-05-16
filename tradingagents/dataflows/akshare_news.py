@@ -15,6 +15,7 @@ from dateutil.relativedelta import relativedelta
 
 from .config import get_config
 from .akshare_source import _ak_retry, _normalise_ticker
+from .utils import parse_date
 
 logger = logging.getLogger(__name__)
 
@@ -40,8 +41,8 @@ def get_news_akshare(
     if raw_df is None or raw_df.empty:
         return f"No news found for {ticker}"
 
-    start_dt = datetime.strptime(start_date, "%Y-%m-%d")
-    end_dt = datetime.strptime(end_date, "%Y-%m-%d")
+    start_dt = parse_date(start_date)
+    end_dt = parse_date(end_date)
     limit = get_config().get("news_article_limit", 20)
 
     lines = []
@@ -177,7 +178,7 @@ def _fetch_cctv_news(curr_date: str) -> str:
 
 def _fetch_baidu_economic(curr_date: str, look_back_days: int, limit: int) -> str:
     """Fetch global economic events from Baidu calendar."""
-    curr_dt = datetime.strptime(curr_date, "%Y-%m-%d")
+    curr_dt = parse_date(curr_date)
     all_rows = []
 
     for offset in range(look_back_days):
