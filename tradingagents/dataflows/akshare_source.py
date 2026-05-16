@@ -41,6 +41,16 @@ def _normalise_ticker(symbol: str) -> str:
     return upper
 
 
+def _sina_prefix(code: str) -> str:
+    """Convert 6-digit A-share code to Sina prefix format.
+
+    ``600519`` → ``sh600519``, ``000001`` → ``sz000001``
+    """
+    if code.startswith("6"):
+        return f"sh{code}"
+    return f"sz{code}"
+
+
 def _is_a_share(symbol: str) -> bool:
     """Return True if *symbol* looks like an A-share ticker."""
     code = _normalise_ticker(symbol)
@@ -86,12 +96,11 @@ def get_akshare_data_online(
 
     try:
         df = _ak_retry(
-            lambda: ak.stock_zh_a_hist(
-                symbol=code,
-                period="daily",
+            lambda: ak.stock_zh_a_daily(
+                symbol=_sina_prefix(code),
                 start_date=start_date.replace("-", ""),
                 end_date=end_date.replace("-", ""),
-                adjust="qfq",  # forward-adjusted (前复权)
+                adjust="qfq",
             )
         )
     except Exception as e:
@@ -104,14 +113,14 @@ def get_akshare_data_online(
             f"No data found for symbol '{symbol}' between {start_date} and {end_date}"
         )
 
-    # akshare columns: 日期,开盘,收盘,最高,最低,成交量,成交额,振幅,涨跌幅,涨跌额,换手率
+    # stock_zh_a_daily (Sina) columns: date, open, high, close, low, volume, amount, ...
     col_map = {
-        "日期": "Date",
-        "开盘": "Open",
-        "收盘": "Close",
-        "最高": "High",
-        "最低": "Low",
-        "成交量": "Volume",
+        "date": "Date",
+        "open": "Open",
+        "close": "Close",
+        "high": "High",
+        "low": "Low",
+        "volume": "Volume",
     }
     df = df.rename(columns={k: v for k, v in col_map.items() if k in df.columns})
 
@@ -263,38 +272,36 @@ def _load_ohclv_akshare(symbol: str, curr_date: str) -> pd.DataFrame:
         except Exception:
             pass
 
-    # Fetch from akshare
+    # Fetch from akshare (Sina source)
     try:
         end_str = curr_date_dt.strftime("%Y%m%d")
-        start_str = (curr_date_dt - relativedelta(years=15)).strftime("%Y%m%d")
+        start_str = (curr_date_dt - relativedelta(years=10)).strftime("%Y%m%d")
         df = _ak_retry(
-            lambda: ak.stock_zh_a_hist(
-                symbol=code, period="daily",
+            lambda: ak.stock_zh_a_daily(
+                symbol=_sina_prefix(code),
                 start_date=start_str, end_date=end_str, adjust="qfq",
             )
         )
     except Exception:
-        # Try reduced range if 15 years fails
         try:
-            start_str = (curr_date_dt - relativedelta(years=5)).strftime("%Y%m%d")
+            start_str = (curr_date_dt - relativedelta(years=3)).strftime("%Y%m%d")
             df = _ak_retry(
-                lambda: ak.stock_zh_a_hist(
-                    symbol=code, period="daily",
+                lambda: ak.stock_zh_a_daily(
+                    symbol=_sina_prefix(code),
                     start_date=start_str, end_date=end_str, adjust="qfq",
                 )
             )
         except Exception as e:
             raise RuntimeError(f"akshare OHLCV fetch failed for {symbol}: {e}")
 
-    # Normalise column names to match stockstats expectations
+    # Normalise column names from stock_zh_a_daily (Sina)
     col_map = {
-        "日期": "Date",
-        "开盘": "Open",
-        "最高": "High",
-        "最低": "Low",
-        "收盘": "Close",
-        "成交量": "Volume",
-        "振幅": "Amplitude",
+        "date": "Date",
+        "open": "Open",
+        "high": "High",
+        "low": "Low",
+        "close": "Close",
+        "volume": "Volume",
     }
     df = df.rename(columns={k: v for k, v in col_map.items() if k in df.columns})
     for col in ("Open", "High", "Low", "Close", "Volume"):
@@ -367,17 +374,19 @@ def get_balance_sheet_akshare(
     freq: Annotated[str, "frequency: 'annual' or 'quarterly'"] = "quarterly",
     curr_date: Annotated[str, "current date in YYYY-MM-DD format"] = None,
 ) -> str:
-    """Get A-share balance sheet from akshare."""
+    """Get A-share balance sheet from Sina via akshare."""
     code = _normalise_ticker(ticker)
     try:
-        df = _ak_retry(lambda: ak.stock_balance_sheet_by_report_em(symbol=code))
+        df = _ak_retry(lambda: ak.stock_financial_report_sina(
+            stock=_sina_prefix(code), symbol="资产负债表",
+        ))
     except Exception as e:
         return f"Error retrieving balance sheet for {ticker}: {e}"
 
     if df is None or df.empty:
         return f"No balance sheet data found for '{ticker}'"
 
-    return _format_financial("Balance Sheet", ticker, df, curr_date)
+    return _format_financial_sina("Balance Sheet", ticker, df, curr_date)
 
 
 def get_cashflow_akshare(
@@ -385,17 +394,19 @@ def get_cashflow_akshare(
     freq: Annotated[str, "frequency: 'annual' or 'quarterly'"] = "quarterly",
     curr_date: Annotated[str, "current date in YYYY-MM-DD format"] = None,
 ) -> str:
-    """Get A-share cash flow from akshare."""
+    """Get A-share cash flow from Sina via akshare."""
     code = _normalise_ticker(ticker)
     try:
-        df = _ak_retry(lambda: ak.stock_cash_flow_sheet_by_report_em(symbol=code))
+        df = _ak_retry(lambda: ak.stock_financial_report_sina(
+            stock=_sina_prefix(code), symbol="现金流量表",
+        ))
     except Exception as e:
         return f"Error retrieving cash flow for {ticker}: {e}"
 
     if df is None or df.empty:
         return f"No cash flow data found for '{ticker}'"
 
-    return _format_financial("Cash Flow", ticker, df, curr_date)
+    return _format_financial_sina("Cash Flow", ticker, df, curr_date)
 
 
 def get_income_statement_akshare(
@@ -403,23 +414,33 @@ def get_income_statement_akshare(
     freq: Annotated[str, "frequency: 'annual' or 'quarterly'"] = "quarterly",
     curr_date: Annotated[str, "current date in YYYY-MM-DD format"] = None,
 ) -> str:
-    """Get A-share income statement from akshare."""
+    """Get A-share income statement from Sina via akshare."""
     code = _normalise_ticker(ticker)
     try:
-        df = _ak_retry(lambda: ak.stock_profit_sheet_by_report_em(symbol=code))
+        df = _ak_retry(lambda: ak.stock_financial_report_sina(
+            stock=_sina_prefix(code), symbol="利润表",
+        ))
     except Exception as e:
         return f"Error retrieving income statement for {ticker}: {e}"
 
     if df is None or df.empty:
         return f"No income statement data found for '{ticker}'"
 
-    return _format_financial("Income Statement", ticker, df, curr_date)
+    return _format_financial_sina("Income Statement", ticker, df, curr_date)
 
 
-def _format_financial(sheet_type: str, ticker: str, df: pd.DataFrame, curr_date: str = None) -> str:
-    """Format a financial statement DataFrame for prompt injection."""
+def _format_financial_sina(sheet_type: str, ticker: str, df: pd.DataFrame, curr_date: str = None) -> str:
+    """Format a Sina financial statement DataFrame for prompt injection.
+
+    Sina's format: first column is 报告日 (report dates), other columns
+    are financial items. Each row is one reporting period.
+    """
+    # Rename first column
+    first_col = df.columns[0]
+    df = df.rename(columns={first_col: "报告日期"})
+
     # Filter by date if provided
-    if curr_date and "报告日期" in df.columns:
+    if curr_date:
         df["报告日期"] = pd.to_datetime(df["报告日期"])
         curr = pd.to_datetime(curr_date)
         df = df[df["报告日期"] <= curr]
@@ -431,7 +452,7 @@ def _format_financial(sheet_type: str, ticker: str, df: pd.DataFrame, curr_date:
     header = (
         f"# {sheet_type} data for {ticker}\n"
         f"# Data retrieved on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
-        f"# Source: akshare\n\n"
+        f"# Source: akshare (Sina)\n\n"
     )
     return header + csv_string
 

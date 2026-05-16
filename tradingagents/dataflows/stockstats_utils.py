@@ -69,13 +69,14 @@ def _is_a_share_code(symbol: str) -> bool:
 
 
 def _load_ohlcv_akshare(symbol: str, curr_date: str) -> pd.DataFrame:
-    """Fetch OHLCV from akshare for A-share tickers."""
+    """Fetch OHLCV from akshare (Sina source) for A-share tickers."""
     import akshare as ak
-    from dateutil.relativedelta import relativedelta
 
     code = symbol.upper().strip()
     if code.endswith(".SH") or code.endswith(".SZ"):
         code = code[:6]
+    # Sina prefix format
+    sina_code = f"sh{code}" if code.startswith("6") else f"sz{code}"
 
     safe_symbol = safe_ticker_component(code)
     config = get_config()
@@ -94,21 +95,21 @@ def _load_ohlcv_akshare(symbol: str, curr_date: str) -> pd.DataFrame:
         end_str = today_date.strftime("%Y%m%d")
         start_str = (today_date - pd.DateOffset(years=10)).strftime("%Y%m%d")
         try:
-            df = ak.stock_zh_a_hist(
-                symbol=code, period="daily",
+            df = ak.stock_zh_a_daily(
+                symbol=sina_code,
                 start_date=start_str, end_date=end_str, adjust="qfq",
             )
         except Exception:
             logger.warning("akshare 10y fetch failed for %s, trying 3y", code)
             start_str = (today_date - pd.DateOffset(years=3)).strftime("%Y%m%d")
-            df = ak.stock_zh_a_hist(
-                symbol=code, period="daily",
+            df = ak.stock_zh_a_daily(
+                symbol=sina_code,
                 start_date=start_str, end_date=end_str, adjust="qfq",
             )
 
         col_map = {
-            "日期": "Date", "开盘": "Open", "最高": "High",
-            "最低": "Low", "收盘": "Close", "成交量": "Volume",
+            "date": "Date", "open": "Open", "high": "High",
+            "low": "Low", "close": "Close", "volume": "Volume",
         }
         df = df.rename(columns={k: v for k, v in col_map.items() if k in df.columns})
         for col in ("Open", "High", "Low", "Close", "Volume"):

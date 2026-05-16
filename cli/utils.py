@@ -522,3 +522,20 @@ def ask_output_language() -> str:
         ).ask().strip()
 
     return choice
+
+
+def select_market_region() -> str:
+    """Ask for target market region / data source."""
+    choice = questionary.select(
+        "Select Market Region / Data Source:",
+        choices=[
+            questionary.Choice("US Stocks (yfinance)", "us"),
+            questionary.Choice("China A-Share / A股 (akshare)", "cn"),
+        ],
+        style=questionary.Style([
+            ("selected", "fg:yellow noinherit"),
+            ("highlighted", "fg:yellow noinherit"),
+            ("pointer", "fg:yellow noinherit"),
+        ]),
+    ).ask()
+    return choice
