@@ -26,7 +26,14 @@ def get_ticker() -> str:
     """Prompt the user to enter a ticker symbol."""
     ticker = questionary.text(
         f"请输入要分析的精确股票代码（{TICKER_INPUT_EXAMPLES}）：",
-        validate=lambda x: len(x.strip()) > 0 or "请输入有效的股票代码。",
+        validate=lambda x: (
+            len(x.strip()) > 0
+            and all(
+                (ch.isascii() and (ch.isalnum() or ch in "._-^"))
+                for ch in x.strip()
+            )
+        )
+        or "请输入有效的股票代码（仅支持英文字母、数字和 ._-^）。",
         style=questionary.Style(
             [
                 ("text", "fg:green"),

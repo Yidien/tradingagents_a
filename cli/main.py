@@ -647,11 +647,11 @@ def get_ticker():
         validate=lambda value: (
             not value.strip()
             or (
-                all(ch.isalnum() or ch in "._-^" for ch in value.strip())
+                all((ch.isascii() and ch.isalnum()) or ch in "._-^" for ch in value.strip())
                 and len(value.strip()) <= 32
             )
         )
-        or "请输入有效的股票代码，例如 AAPL、000404.SZ、0700.HK。",
+        or "请输入有效的股票代码（仅支持英文字母、数字和 ._-^），例如 AAPL、000404.SZ、0700.HK。",
     ).ask()
 
     if ticker is None:
@@ -1075,7 +1075,11 @@ def run_analysis(checkpoint: bool = False):
     # Now start the display layout
     layout = create_layout()
 
-    with Live(layout, refresh_per_second=4) as live:
+    # WSL 终端兼容性较差，降低刷新率避免闪屏
+    import platform
+    _is_wsl = "microsoft" in platform.uname().release.lower()
+    _refresh_rate = 1 if _is_wsl else 4
+    with Live(layout, refresh_per_second=_refresh_rate) as live:
         # Initial display
         update_display(layout, stats_handler=stats_handler, start_time=start_time)
 
