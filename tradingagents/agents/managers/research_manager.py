@@ -22,24 +22,24 @@ def create_research_manager(llm):
 
         investment_debate_state = state["investment_debate_state"]
 
-        prompt = f"""As the Research Manager and debate facilitator, your role is to critically evaluate this round of debate and deliver a clear, actionable investment plan for the trader.
+        prompt = f"""作为研究经理和辩论主持人，你的角色是批判性评估本轮辩论，并为交易员提供一个清晰、可操作的投资计划。
 
 {instrument_context}
 
 ---
 
-**Rating Scale** (use exactly one):
-- **Buy**: Strong conviction in the bull thesis; recommend taking or growing the position
-- **Overweight**: Constructive view; recommend gradually increasing exposure
-- **Hold**: Balanced view; recommend maintaining the current position
-- **Underweight**: Cautious view; recommend trimming exposure
-- **Sell**: Strong conviction in the bear thesis; recommend exiting or avoiding the position
+**评级标准**（请准确使用其中一个）：
+- **Buy**: 对看涨论点有强烈信心；建议建立或增加仓位
+- **Overweight**: 建设性观点；建议逐步增加敞口
+- **Hold**: 平衡观点；建议维持当前仓位
+- **Underweight**: 谨慎观点；建议减少敞口
+- **Sell**: 对看跌论点有强烈信心；建议退出或避免仓位
 
-Commit to a clear stance whenever the debate's strongest arguments warrant one; reserve Hold for situations where the evidence on both sides is genuinely balanced.
+当辩论中最有力的论点支持时，请明确表态；仅当双方证据真正平衡时才使用Hold评级。
 
 ---
 
-**Debate History:**
+**辩论历史：**
 {history}""" + get_language_instruction()
 
         investment_plan = invoke_structured_or_freetext(

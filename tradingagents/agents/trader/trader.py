@@ -1,4 +1,4 @@
-"""Trader: turns the Research Manager's investment plan into a concrete transaction proposal."""
+"""Trader: 将研究经理的投资计划转化为具体的交易提案。"""
 
 from __future__ import annotations
 
@@ -29,21 +29,21 @@ def create_trader(llm):
             {
                 "role": "system",
                 "content": (
-                    "You are a trading agent analyzing market data to make investment decisions. "
-                    "Based on your analysis, provide a specific recommendation to buy, sell, or hold. "
-                    "Anchor your reasoning in the analysts' reports and the research plan."
+                    "你是一个分析市场数据以做出投资决策的交易代理。"
+                    "基于你的分析，提供具体的买入、卖出或持有建议。"
+                    "将你的推理锚定在分析师报告和研究计划中。"
                     + get_language_instruction()
                 ),
             },
             {
                 "role": "user",
                 "content": (
-                    f"Based on a comprehensive analysis by a team of analysts, here is an investment "
-                    f"plan tailored for {company_name}. {instrument_context} This plan incorporates "
-                    f"insights from current technical market trends, macroeconomic indicators, and "
-                    f"social media sentiment. Use this plan as a foundation for evaluating your next "
-                    f"trading decision.\n\nProposed Investment Plan: {investment_plan}\n\n"
-                    f"Leverage these insights to make an informed and strategic decision."
+                    f"基于分析师团队的全面分析，这是为{company_name}量身定制的投资"
+                    f"计划。{instrument_context} 该计划整合了"
+                    f"当前技术市场趋势、宏观经济指标和"
+                    f"社交媒体情绪的见解。将此计划作为评估你下一次"
+                    f"交易决策的基础。\n\n拟议投资计划：{investment_plan}\n\n"
+                    f"利用这些见解做出明智且具有战略性的决策。"
                 ),
             },
         ]

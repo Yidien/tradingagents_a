@@ -1,4 +1,4 @@
-"""Append-only markdown decision log for TradingAgents."""
+"""TradingAgents 的仅追加 markdown 决策日志。"""
 
 from typing import List, Optional
 from pathlib import Path
@@ -8,11 +8,11 @@ from tradingagents.agents.utils.rating import parse_rating
 
 
 class TradingMemoryLog:
-    """Append-only markdown log of trading decisions and reflections."""
+    """交易决策和反思的仅追加 markdown 日志。"""
 
-    # HTML comment: cannot appear in LLM prose output, safe as a hard delimiter
+    # HTML 注释：不会出现在 LLM 文本输出中，可作为硬分隔符
     _SEPARATOR = "\n\n<!-- ENTRY_END -->\n\n"
-    # Precompiled patterns — avoids re-compilation on every load_entries() call
+    # 预编译模式 — 避免每次 load_entries() 调用时重新编译
     _DECISION_RE = re.compile(r"DECISION:\n(.*?)(?=\nREFLECTION:|\Z)", re.DOTALL)
     _REFLECTION_RE = re.compile(r"REFLECTION:\n(.*?)$", re.DOTALL)
 
@@ -23,10 +23,10 @@ class TradingMemoryLog:
         if path:
             self._log_path = Path(path).expanduser()
             self._log_path.parent.mkdir(parents=True, exist_ok=True)
-        # Optional cap on resolved entries. None disables rotation.
+        # 已解决条目的可选上限。None 禁用轮换。
         self._max_entries = cfg.get("memory_log_max_entries")
 
-    # --- Write path (Phase A) ---
+    # --- 写入路径（阶段 A）---
 
     def store_decision(
         self,
@@ -34,10 +34,10 @@ class TradingMemoryLog:
         trade_date: str,
         final_trade_decision: str,
     ) -> None:
-        """Append pending entry at end of propagate(). No LLM call."""
+        """在 propagate() 末尾追加待处理条目。无需 LLM 调用。"""
         if not self._log_path:
             return
-        # Idempotency guard: fast raw-text scan instead of full parse
+        # 幂等性保护：快速原始文本扫描而非完全解析
         if self._log_path.exists():
             raw = self._log_path.read_text(encoding="utf-8")
             for line in raw.splitlines():
@@ -49,10 +49,10 @@ class TradingMemoryLog:
         with open(self._log_path, "a", encoding="utf-8") as f:
             f.write(entry)
 
-    # --- Read path (Phase A) ---
+    # --- 读取路径（阶段 A）---
 
     def load_entries(self) -> List[dict]:
-        """Parse all entries from log. Returns list of dicts."""
+        """从日志中解析所有条目。返回字典列表。"""
         if not self._log_path or not self._log_path.exists():
             return []
         text = self._log_path.read_text(encoding="utf-8")
@@ -65,11 +65,11 @@ class TradingMemoryLog:
         return entries
 
     def get_pending_entries(self) -> List[dict]:
-        """Return entries with outcome:pending (for Phase B)."""
+        """返回结果为 pending 的条目（用于阶段 B）。"""
         return [e for e in self.load_entries() if e.get("pending")]
 
     def get_past_context(self, ticker: str, n_same: int = 5, n_cross: int = 3) -> str:
-        """Return formatted past context string for agent prompt injection."""
+        """返回格式化后的历史上下文字符串，用于代理提示注入。"""
         entries = [e for e in self.load_entries() if not e.get("pending")]
         if not entries:
             return ""
@@ -88,14 +88,14 @@ class TradingMemoryLog:
 
         parts = []
         if same:
-            parts.append(f"Past analyses of {ticker} (most recent first):")
+            parts.append(f"{ticker} 的历史分析（最近优先）：")
             parts.extend(self._format_full(e) for e in same)
         if cross:
-            parts.append("Recent cross-ticker lessons:")
+            parts.append("近期跨股票代码的经验教训：")
             parts.extend(self._format_reflection_only(e) for e in cross)
         return "\n\n".join(parts)
 
-    # --- Update path (Phase B) ---
+    # --- 更新路径（阶段 B）---
 
     def update_with_outcome(
         self,
@@ -106,11 +106,11 @@ class TradingMemoryLog:
         holding_days: int,
         reflection: str,
     ) -> None:
-        """Replace pending tag and append REFLECTION section using atomic write.
+        """使用原子写入替换待处理标签并追加 REFLECTION 部分。
 
-        Finds the first pending entry matching (trade_date, ticker), updates
-        its tag with return figures, and appends a REFLECTION section.  Uses
-        a temp-file + os.replace() so a crash mid-write never corrupts the log.
+        查找匹配 (trade_date, ticker) 的第一个待处理条目，
+        用回报数据更新其标签，并追加 REFLECTION 部分。
+        使用临时文件 + os.replace()，确保写入中途崩溃不会损坏日志。
         """
         if not self._log_path or not self._log_path.exists():
             return
@@ -163,10 +163,10 @@ class TradingMemoryLog:
         tmp_path.replace(self._log_path)
 
     def batch_update_with_outcomes(self, updates: List[dict]) -> None:
-        """Apply multiple outcome updates in a single read + atomic write.
+        """在单次读取 + 原子写入中应用多个结果更新。
 
-        Each element of updates must have keys: ticker, trade_date,
-        raw_return, alpha_return, holding_days, reflection.
+        updates 的每个元素必须包含键：ticker, trade_date,
+        raw_return, alpha_return, holding_days, reflection。
         """
         if not self._log_path or not self._log_path.exists() or not updates:
             return
@@ -174,7 +174,7 @@ class TradingMemoryLog:
         text = self._log_path.read_text(encoding="utf-8")
         blocks = text.split(self._SEPARATOR)
 
-        # Build lookup keyed by (trade_date, ticker) for O(1) dispatch
+        # 构建按 (trade_date, ticker) 键控的查找表以实现 O(1) 调度
         update_map = {(u["trade_date"], u["ticker"]): u for u in updates}
 
         new_blocks = []
@@ -216,18 +216,18 @@ class TradingMemoryLog:
         tmp_path.write_text(new_text, encoding="utf-8")
         tmp_path.replace(self._log_path)
 
-    # --- Helpers ---
+    # --- 辅助函数 ---
 
     def _apply_rotation(self, blocks: List[str]) -> List[str]:
-        """Drop oldest resolved blocks when their count exceeds max_entries.
+        """当已解决块的数量超过 max_entries 时，删除最旧的已解决块。
 
-        Pending blocks are always kept (they represent unprocessed work).
-        Returns ``blocks`` unchanged when rotation is disabled or under cap.
+        待处理块始终保留（它们代表未处理的工作）。
+        当轮换被禁用或未超过上限时，返回未更改的 ``blocks``。
         """
         if not self._max_entries or self._max_entries <= 0:
             return blocks
 
-        # Tag each block with (kept, is_resolved) by parsing tag-line markers.
+        # 通过解析标签行标记，为每个块标记 (kept, is_resolved)。
         decisions = []
         for block in blocks:
             stripped = block.strip()

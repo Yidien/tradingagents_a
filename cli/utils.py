@@ -12,7 +12,7 @@ from tradingagents.llm_clients.model_catalog import get_model_options
 
 console = Console()
 
-TICKER_INPUT_EXAMPLES = "Examples: SPY, CNC.TO, 7203.T, 0700.HK"
+TICKER_INPUT_EXAMPLES = "示例：SPY, CNC.TO, 7203.T, 0700.HK"
 
 ANALYST_ORDER = [
     ("Market Analyst", AnalystType.MARKET),
@@ -25,8 +25,8 @@ ANALYST_ORDER = [
 def get_ticker() -> str:
     """Prompt the user to enter a ticker symbol."""
     ticker = questionary.text(
-        f"Enter the exact ticker symbol to analyze ({TICKER_INPUT_EXAMPLES}):",
-        validate=lambda x: len(x.strip()) > 0 or "Please enter a valid ticker symbol.",
+        f"请输入要分析的精确股票代码（{TICKER_INPUT_EXAMPLES}）：",
+        validate=lambda x: len(x.strip()) > 0 or "请输入有效的股票代码。",
         style=questionary.Style(
             [
                 ("text", "fg:green"),
@@ -36,7 +36,7 @@ def get_ticker() -> str:
     ).ask()
 
     if not ticker:
-        console.print("\n[red]No ticker symbol provided. Exiting...[/red]")
+        console.print("\n[red]未提供股票代码，退出中...[/red]")
         exit(1)
 
     return normalize_ticker_symbol(ticker)
@@ -62,9 +62,9 @@ def get_analysis_date() -> str:
             return False
 
     date = questionary.text(
-        "Enter the analysis date (YYYY-MM-DD):",
+        "请输入分析日期（YYYY-MM-DD）：",
         validate=lambda x: validate_date(x.strip())
-        or "Please enter a valid date in YYYY-MM-DD format.",
+        or "请输入有效日期，格式为 YYYY-MM-DD。",
         style=questionary.Style(
             [
                 ("text", "fg:green"),
@@ -74,7 +74,7 @@ def get_analysis_date() -> str:
     ).ask()
 
     if not date:
-        console.print("\n[red]No date provided. Exiting...[/red]")
+        console.print("\n[red]未提供日期，退出中...[/red]")
         exit(1)
 
     return date.strip()
@@ -83,12 +83,12 @@ def get_analysis_date() -> str:
 def select_analysts() -> List[AnalystType]:
     """Select analysts using an interactive checkbox."""
     choices = questionary.checkbox(
-        "Select Your [Analysts Team]:",
+        "选择您的[分析师团队]：",
         choices=[
             questionary.Choice(display, value=value) for display, value in ANALYST_ORDER
         ],
-        instruction="\n- Press Space to select/unselect analysts\n- Press 'a' to select/unselect all\n- Press Enter when done",
-        validate=lambda x: len(x) > 0 or "You must select at least one analyst.",
+        instruction="\n- 按空格键选择/取消分析师\n- 按 'a' 全选/取消全选\n- 按回车确认",
+        validate=lambda x: len(x) > 0 or "您必须至少选择一位分析师。",
         style=questionary.Style(
             [
                 ("checkbox-selected", "fg:green"),
@@ -100,7 +100,7 @@ def select_analysts() -> List[AnalystType]:
     ).ask()
 
     if not choices:
-        console.print("\n[red]No analysts selected. Exiting...[/red]")
+        console.print("\n[red]未选择分析师，退出中...[/red]")
         exit(1)
 
     return choices
@@ -111,17 +111,17 @@ def select_research_depth() -> int:
 
     # Define research depth options with their corresponding values
     DEPTH_OPTIONS = [
-        ("Shallow - Quick research, few debate and strategy discussion rounds", 1),
-        ("Medium - Middle ground, moderate debate rounds and strategy discussion", 3),
-        ("Deep - Comprehensive research, in depth debate and strategy discussion", 5),
+        ("浅度 - 快速研究，少量辩论和策略讨论轮次", 1),
+        ("中度 - 适中研究，适度辩论和策略讨论", 3),
+        ("深度 - 全面研究，深入辩论和策略讨论", 5),
     ]
 
     choice = questionary.select(
-        "Select Your [Research Depth]:",
+        "选择您的[研究深度]：",
         choices=[
             questionary.Choice(display, value=value) for display, value in DEPTH_OPTIONS
         ],
-        instruction="\n- Use arrow keys to navigate\n- Press Enter to select",
+        instruction="\n- 使用方向键导航\n- 按回车选择",
         style=questionary.Style(
             [
                 ("selected", "fg:yellow noinherit"),
@@ -132,7 +132,7 @@ def select_research_depth() -> int:
     ).ask()
 
     if choice is None:
-        console.print("\n[red]No research depth selected. Exiting...[/red]")
+        console.print("\n[red]未选择研究深度，退出中...[/red]")
         exit(1)
 
     return choice
@@ -147,7 +147,7 @@ def _fetch_openrouter_models() -> List[Tuple[str, str]]:
         models = resp.json().get("data", [])
         return [(m.get("name") or m["id"], m["id"]) for m in models]
     except Exception as e:
-        console.print(f"\n[yellow]Could not fetch OpenRouter models: {e}[/yellow]")
+        console.print(f"\n[yellow]无法获取 OpenRouter 模型：{e}[/yellow]")
         return []
 
 
@@ -156,12 +156,12 @@ def select_openrouter_model() -> str:
     models = _fetch_openrouter_models()
 
     choices = [questionary.Choice(name, value=mid) for name, mid in models[:5]]
-    choices.append(questionary.Choice("Custom model ID", value="custom"))
+    choices.append(questionary.Choice("自定义模型 ID", value="custom"))
 
     choice = questionary.select(
-        "Select OpenRouter Model (latest available):",
+        "选择 OpenRouter 模型（最新可用）：",
         choices=choices,
-        instruction="\n- Use arrow keys to navigate\n- Press Enter to select",
+        instruction="\n- 使用方向键导航\n- 按回车选择",
         style=questionary.Style([
             ("selected", "fg:magenta noinherit"),
             ("highlighted", "fg:magenta noinherit"),
@@ -171,8 +171,8 @@ def select_openrouter_model() -> str:
 
     if choice is None or choice == "custom":
         return questionary.text(
-            "Enter OpenRouter model ID (e.g. google/gemma-4-26b-a4b-it):",
-            validate=lambda x: len(x.strip()) > 0 or "Please enter a model ID.",
+            "请输入 OpenRouter 模型 ID（例如 google/gemma-4-26b-a4b-it）：",
+            validate=lambda x: len(x.strip()) > 0 or "请输入模型 ID。",
         ).ask().strip()
 
     return choice
@@ -181,8 +181,8 @@ def select_openrouter_model() -> str:
 def _prompt_custom_model_id() -> str:
     """Prompt user to type a custom model ID."""
     return questionary.text(
-        "Enter model ID:",
-        validate=lambda x: len(x.strip()) > 0 or "Please enter a model ID.",
+        "请输入模型 ID：",
+        validate=lambda x: len(x.strip()) > 0 or "请输入模型 ID。",
     ).ask().strip()
 
 
@@ -193,17 +193,17 @@ def _select_model(provider: str, mode: str) -> str:
 
     if provider.lower() == "azure":
         return questionary.text(
-            f"Enter Azure deployment name ({mode}-thinking):",
-            validate=lambda x: len(x.strip()) > 0 or "Please enter a deployment name.",
+            f"请输入 Azure 部署名称（{mode}-thinking）：",
+            validate=lambda x: len(x.strip()) > 0 or "请输入部署名称。",
         ).ask().strip()
 
     choice = questionary.select(
-        f"Select Your [{mode.title()}-Thinking LLM Engine]:",
+        f"选择您的[{mode.title()}-Thinking LLM 引擎]：",
         choices=[
             questionary.Choice(display, value=value)
             for display, value in get_model_options(provider, mode)
         ],
-        instruction="\n- Use arrow keys to navigate\n- Press Enter to select",
+        instruction="\n- 使用方向键导航\n- 按回车选择",
         style=questionary.Style(
             [
                 ("selected", "fg:magenta noinherit"),
@@ -214,7 +214,7 @@ def _select_model(provider: str, mode: str) -> str:
     ).ask()
 
     if choice is None:
-        console.print(f"\n[red]No {mode} thinking llm engine selected. Exiting...[/red]")
+        console.print(f"\n[red]未选择{mode}思考 LLM 引擎，退出中...[/red]")
         exit(1)
 
     if choice == "custom":
@@ -254,12 +254,12 @@ def select_llm_provider() -> tuple[str, str | None]:
     ]
 
     choice = questionary.select(
-        "Select your LLM Provider:",
+        "选择您的 LLM 提供商：",
         choices=[
             questionary.Choice(display, value=(provider_key, url))
             for display, provider_key, url in PROVIDERS
         ],
-        instruction="\n- Use arrow keys to navigate\n- Press Enter to select",
+        instruction="\n- 使用方向键导航\n- 按回车选择",
         style=questionary.Style(
             [
                 ("selected", "fg:magenta noinherit"),
@@ -270,7 +270,7 @@ def select_llm_provider() -> tuple[str, str | None]:
     ).ask()
     
     if choice is None:
-        console.print("\n[red]No LLM provider selected. Exiting...[/red]")
+        console.print("\n[red]未选择 LLM 提供商，退出中...[/red]")
         exit(1)
 
     provider, url = choice
@@ -280,12 +280,12 @@ def select_llm_provider() -> tuple[str, str | None]:
 def ask_openai_reasoning_effort() -> str:
     """Ask for OpenAI reasoning effort level."""
     choices = [
-        questionary.Choice("Medium (Default)", "medium"),
-        questionary.Choice("High (More thorough)", "high"),
-        questionary.Choice("Low (Faster)", "low"),
+        questionary.Choice("中等（默认）", "medium"),
+        questionary.Choice("高（更全面）", "high"),
+        questionary.Choice("低（更快）", "low"),
     ]
     return questionary.select(
-        "Select Reasoning Effort:",
+        "选择推理力度：",
         choices=choices,
         style=questionary.Style([
             ("selected", "fg:cyan noinherit"),
@@ -303,11 +303,11 @@ def ask_anthropic_effort() -> str | None:
     common selection range.
     """
     return questionary.select(
-        "Select Effort Level:",
+        "选择努力级别：",
         choices=[
-            questionary.Choice("High (recommended)", "high"),
-            questionary.Choice("Medium (balanced)", "medium"),
-            questionary.Choice("Low (faster, cheaper)", "low"),
+            questionary.Choice("高（推荐）", "high"),
+            questionary.Choice("中等（均衡）", "medium"),
+            questionary.Choice("低（更快，更省）", "low"),
         ],
         style=questionary.Style([
             ("selected", "fg:cyan noinherit"),
@@ -324,10 +324,10 @@ def ask_gemini_thinking_config() -> str | None:
     Client maps to appropriate API param based on model series.
     """
     return questionary.select(
-        "Select Thinking Mode:",
+        "选择思考模式：",
         choices=[
-            questionary.Choice("Enable Thinking (recommended)", "high"),
-            questionary.Choice("Minimal/Disable Thinking", "minimal"),
+            questionary.Choice("启用思考（推荐）", "high"),
+            questionary.Choice("最小化/禁用思考", "minimal"),
         ],
         style=questionary.Style([
             ("selected", "fg:green noinherit"),
@@ -344,14 +344,14 @@ def ask_glm_region() -> tuple[str, str]:
     accounts; keys aren't interchangeable. Returns (provider_key, backend_url).
     """
     return questionary.select(
-        "Select GLM platform:",
+        "选择 GLM 平台：",
         choices=[
             questionary.Choice(
-                "Z.AI — api.z.ai (international, uses ZHIPU_API_KEY)",
+                "Z.AI — api.z.ai（国际版，使用 ZHIPU_API_KEY）",
                 value=("glm", "https://api.z.ai/api/paas/v4/"),
             ),
             questionary.Choice(
-                "BigModel — open.bigmodel.cn (China, uses ZHIPU_CN_API_KEY)",
+                "BigModel — open.bigmodel.cn（中国版，使用 ZHIPU_CN_API_KEY）",
                 value=("glm-cn", "https://open.bigmodel.cn/api/paas/v4/"),
             ),
         ],
@@ -371,14 +371,14 @@ def ask_qwen_region() -> tuple[str, str]:
     (fixes #758). Returns (provider_key, backend_url).
     """
     return questionary.select(
-        "Select Qwen region:",
+        "选择 Qwen 区域：",
         choices=[
             questionary.Choice(
-                "International — dashscope-intl.aliyuncs.com (uses DASHSCOPE_API_KEY)",
+                "国际版 — dashscope-intl.aliyuncs.com（使用 DASHSCOPE_API_KEY）",
                 value=("qwen", "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"),
             ),
             questionary.Choice(
-                "China — dashscope.aliyuncs.com (uses DASHSCOPE_CN_API_KEY)",
+                "中国版 — dashscope.aliyuncs.com（使用 DASHSCOPE_CN_API_KEY）",
                 value=("qwen-cn", "https://dashscope.aliyuncs.com/compatible-mode/v1"),
             ),
         ],
@@ -398,14 +398,14 @@ def ask_minimax_region() -> tuple[str, str]:
     (provider_key, backend_url).
     """
     return questionary.select(
-        "Select MiniMax region:",
+        "选择 MiniMax 区域：",
         choices=[
             questionary.Choice(
-                "Global — api.minimax.io (uses MINIMAX_API_KEY)",
+                "国际版 — api.minimax.io（使用 MINIMAX_API_KEY）",
                 value=("minimax", "https://api.minimax.io/v1"),
             ),
             questionary.Choice(
-                "China — api.minimaxi.com (uses MINIMAX_CN_API_KEY)",
+                "中国版 — api.minimaxi.com（使用 MINIMAX_CN_API_KEY）",
                 value=("minimax-cn", "https://api.minimaxi.com/v1"),
             ),
         ],
@@ -429,21 +429,20 @@ def confirm_ollama_endpoint(url: str) -> None:
     """
     from_env = os.environ.get("OLLAMA_BASE_URL")
     origin = " (from OLLAMA_BASE_URL)" if from_env and from_env == url else ""
-    console.print(f"[green]✓ Using Ollama at {url}{origin}[/green]")
+    console.print(f"[green]✓ 正在使用 Ollama，地址：{url}{origin}[/green]")
 
     if not url.startswith(("http://", "https://")):
         console.print(
-            f"[yellow]Note: {url!r} is missing a scheme. "
-            f"Ollama-serve typically expects a URL like "
-            f"http://<host>:11434/v1.[/yellow]"
+            f"[yellow]注意：{url!r} 缺少协议前缀。"
+            f"Ollama-serve 通常期望类似 "
+            f"http://<host>:11434/v1 的 URL。[/yellow]"
         )
     elif ":11434" not in url and "://localhost" not in url and "://127.0.0.1" not in url:
         # Soft hint when the port differs from the ollama-serve default
         # and the host isn't local (where users sometimes proxy on :80).
         console.print(
-            f"[yellow]Note: {url!r} doesn't include port 11434. "
-            f"Make sure your remote ollama-serve listens on the port "
-            f"shown above.[/yellow]"
+            f"[yellow]注意：{url!r} 未包含端口 11434。"
+            f"请确保远程 ollama-serve 监听上述端口。[/yellow]"
         )
 
 
@@ -467,10 +466,10 @@ def ensure_api_key(provider: str) -> Optional[str]:
         return existing
 
     console.print(
-        f"\n[yellow]{env_var} is not set in your environment.[/yellow]"
+        f"\n[yellow]{env_var} 未在您的环境中设置。[/yellow]"
     )
     key = questionary.password(
-        f"Paste your {env_var} (will be saved to .env):",
+        f"粘贴您的 {env_var}（将保存到 .env）：",
         style=questionary.Style([
             ("text", "fg:cyan"),
             ("highlighted", "noinherit"),
@@ -478,7 +477,7 @@ def ensure_api_key(provider: str) -> Optional[str]:
     ).ask()
     if not key:
         console.print(
-            f"[red]Skipped. API calls will fail until {env_var} is set.[/red]"
+            f"[red]已跳过。在设置 {env_var} 之前 API 调用将失败。[/red]"
         )
         return None
 
@@ -486,16 +485,16 @@ def ensure_api_key(provider: str) -> Optional[str]:
     Path(env_path).touch(exist_ok=True)
     set_key(env_path, env_var, key)
     os.environ[env_var] = key
-    console.print(f"[green]Saved {env_var} to {env_path}[/green]")
+    console.print(f"[green]已将 {env_var} 保存到 {env_path}[/green]")
     return key
 
 
 def ask_output_language() -> str:
     """Ask for report output language."""
     choice = questionary.select(
-        "Select Output Language:",
+        "选择输出语言：",
         choices=[
-            questionary.Choice("English (default)", "English"),
+            questionary.Choice("English (默认)", "English"),
             questionary.Choice("Chinese (中文)", "Chinese"),
             questionary.Choice("Japanese (日本語)", "Japanese"),
             questionary.Choice("Korean (한국어)", "Korean"),
@@ -506,7 +505,7 @@ def ask_output_language() -> str:
             questionary.Choice("German (Deutsch)", "German"),
             questionary.Choice("Arabic (العربية)", "Arabic"),
             questionary.Choice("Russian (Русский)", "Russian"),
-            questionary.Choice("Custom language", "custom"),
+            questionary.Choice("自定义语言", "custom"),
         ],
         style=questionary.Style([
             ("selected", "fg:yellow noinherit"),
@@ -517,8 +516,8 @@ def ask_output_language() -> str:
 
     if choice == "custom":
         return questionary.text(
-            "Enter language name (e.g. Turkish, Vietnamese, Thai, Indonesian):",
-            validate=lambda x: len(x.strip()) > 0 or "Please enter a language name.",
+            "请输入语言名称（例如 Turkish, Vietnamese, Thai, Indonesian）：",
+            validate=lambda x: len(x.strip()) > 0 or "请输入语言名称。",
         ).ask().strip()
 
     return choice
@@ -527,10 +526,10 @@ def ask_output_language() -> str:
 def select_market_region() -> str:
     """Ask for target market region / data source."""
     choice = questionary.select(
-        "Select Market Region / Data Source:",
+        "选择市场区域 / 数据来源：",
         choices=[
-            questionary.Choice("US Stocks (yfinance)", "us"),
-            questionary.Choice("China A-Share / A股 (akshare)", "cn"),
+            questionary.Choice("美股（yfinance）", "us"),
+            questionary.Choice("A股 / 中国A股（akshare）", "cn"),
         ],
         style=questionary.Style([
             ("selected", "fg:yellow noinherit"),

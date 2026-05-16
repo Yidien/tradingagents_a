@@ -13,25 +13,25 @@ def create_bear_researcher(llm):
         news_report = state["news_report"]
         fundamentals_report = state["fundamentals_report"]
 
-        prompt = f"""You are a Bear Analyst making the case against investing in the stock. Your goal is to present a well-reasoned argument emphasizing risks, challenges, and negative indicators. Leverage the provided research and data to highlight potential downsides and counter bullish arguments effectively.
+        prompt = f"""你是一位看跌分析师，主张不投资该股票。你的目标是提出一个理由充分的论点，强调风险、挑战和负面指标。利用提供的研究和数据来有效突出潜在不利因素并反驳看涨论点。
 
-Key points to focus on:
+重点关注的关键点：
 
-- Risks and Challenges: Highlight factors like market saturation, financial instability, or macroeconomic threats that could hinder the stock's performance.
-- Competitive Weaknesses: Emphasize vulnerabilities such as weaker market positioning, declining innovation, or threats from competitors.
-- Negative Indicators: Use evidence from financial data, market trends, or recent adverse news to support your position.
-- Bull Counterpoints: Critically analyze the bull argument with specific data and sound reasoning, exposing weaknesses or over-optimistic assumptions.
-- Engagement: Present your argument in a conversational style, directly engaging with the bull analyst's points and debating effectively rather than simply listing facts.
+- 风险与挑战：突出市场饱和、财务不稳定或宏观经济威胁等因素，这些因素可能阻碍股票表现。
+- 竞争劣势：强调弱势市场定位、创新力下降或竞争对手威胁等脆弱性。
+- 负面指标：使用财务数据、市场趋势或最近不利新闻的证据来支持你的立场。
+- 看涨反驳点：用具体数据和合理推理批判性分析看涨论点，揭露其弱点或过度乐观的假设。
+- 参与度：以对话风格呈现你的论点，直接参与看涨分析师的论点并进行有效辩论，而不仅仅是罗列事实。
 
-Resources available:
+可用资源：
 
-Market research report: {market_research_report}
-Social media sentiment report: {sentiment_report}
-Latest world affairs news: {news_report}
-Company fundamentals report: {fundamentals_report}
-Conversation history of the debate: {history}
-Last bull argument: {current_response}
-Use this information to deliver a compelling bear argument, refute the bull's claims, and engage in a dynamic debate that demonstrates the risks and weaknesses of investing in the stock.
+市场研究报告：{market_research_report}
+社交媒体情绪报告：{sentiment_report}
+最新世界事务新闻：{news_report}
+公司基本面报告：{fundamentals_report}
+辩论对话历史：{history}
+上次看涨论点：{current_response}
+使用这些信息来提供一个有说服力的看跌论点，反驳看涨的主张，并参与一个动态的辩论，展示投资该股票的风险和弱点。
 """ + get_language_instruction()
 
         response = llm.invoke(prompt)

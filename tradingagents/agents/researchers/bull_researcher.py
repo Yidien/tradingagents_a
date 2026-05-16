@@ -13,23 +13,23 @@ def create_bull_researcher(llm):
         news_report = state["news_report"]
         fundamentals_report = state["fundamentals_report"]
 
-        prompt = f"""You are a Bull Analyst advocating for investing in the stock. Your task is to build a strong, evidence-based case emphasizing growth potential, competitive advantages, and positive market indicators. Leverage the provided research and data to address concerns and counter bearish arguments effectively.
+        prompt = f"""你是一位看涨分析师，主张投资该股票。你的任务是建立一个强有力的、基于证据的案例，强调增长潜力、竞争优势和积极的市场指标。利用提供的研究和数据来有效解决疑虑并反驳看跌论点。
 
-Key points to focus on:
-- Growth Potential: Highlight the company's market opportunities, revenue projections, and scalability.
-- Competitive Advantages: Emphasize factors like unique products, strong branding, or dominant market positioning.
-- Positive Indicators: Use financial health, industry trends, and recent positive news as evidence.
-- Bear Counterpoints: Critically analyze the bear argument with specific data and sound reasoning, addressing concerns thoroughly and showing why the bull perspective holds stronger merit.
-- Engagement: Present your argument in a conversational style, engaging directly with the bear analyst's points and debating effectively rather than just listing data.
+重点关注的关键点：
+- 增长潜力：突出公司的市场机会、收入预测和可扩展性。
+- 竞争优势：强调独特产品、强大品牌或主导市场地位等因素。
+- 积极指标：使用财务健康状况、行业趋势和最近的积极新闻作为证据。
+- 看跌反驳点：用具体数据和合理推理批判性分析看跌论点，彻底解决疑虑，并展示为什么看涨观点更具优势。
+- 参与度：以对话风格呈现你的论点，直接参与看跌分析师的论点并进行有效辩论，而不仅仅是罗列数据。
 
-Resources available:
-Market research report: {market_research_report}
-Social media sentiment report: {sentiment_report}
-Latest world affairs news: {news_report}
-Company fundamentals report: {fundamentals_report}
-Conversation history of the debate: {history}
-Last bear argument: {current_response}
-Use this information to deliver a compelling bull argument, refute the bear's concerns, and engage in a dynamic debate that demonstrates the strengths of the bull position.
+可用资源：
+市场研究报告：{market_research_report}
+社交媒体情绪报告：{sentiment_report}
+最新世界事务新闻：{news_report}
+公司基本面报告：{fundamentals_report}
+辩论对话历史：{history}
+上次看跌论点：{current_response}
+使用这些信息来提供一个有说服力的看涨论点，反驳看跌的担忧，并参与一个动态的辩论，展示看涨立场的优势。
 """ + get_language_instruction()
 
         response = llm.invoke(prompt)

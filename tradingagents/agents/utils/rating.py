@@ -1,12 +1,12 @@
-"""Shared 5-tier rating vocabulary and a deterministic heuristic parser.
+"""共享的 5 级评级词汇表和确定性启发式解析器。
 
-The same five-tier scale (Buy, Overweight, Hold, Underweight, Sell) is used by:
-- The Research Manager (investment plan recommendation)
-- The Portfolio Manager (final position decision)
-- The signal processor (rating extracted for downstream consumers)
-- The memory log (rating tag stored alongside each decision entry)
+相同的五级标准（Buy, Overweight, Hold, Underweight, Sell）被以下使用：
+- 研究经理（投资计划建议）
+- 投资组合经理（最终仓位决策）
+- 信号处理器（为下游消费者提取评级）
+- 记忆日志（与每个决策条目一起存储的评级标签）
 
-Centralising it here avoids drift between those call sites.
+在此集中管理可避免这些调用点之间的漂移。
 """
 
 from __future__ import annotations
@@ -15,26 +15,26 @@ import re
 from typing import Tuple
 
 
-# Canonical, ordered 5-tier scale (most bullish to most bearish).
+# 规范的、有序的 5 级标准（从最看涨到最看跌）。
 RATINGS_5_TIER: Tuple[str, ...] = (
     "Buy", "Overweight", "Hold", "Underweight", "Sell",
 )
 
 _RATING_SET = {r.lower() for r in RATINGS_5_TIER}
 
-# Matches "Rating: X" / "rating - X" / "Rating: **X**" — tolerates markdown
-# bold wrappers and either a colon or hyphen separator.
+# 匹配 "Rating: X" / "rating - X" / "Rating: **X**" — 容忍 markdown
+# 粗体包装和冒号或连字符分隔符。
 _RATING_LABEL_RE = re.compile(r"rating.*?[:\-][\s*]*(\w+)", re.IGNORECASE)
 
 
 def parse_rating(text: str, default: str = "Hold") -> str:
-    """Heuristically extract a 5-tier rating from prose text.
+    """从文本中启发式提取 5 级评级。
 
-    Two-pass strategy:
-    1. Look for an explicit "Rating: X" label (tolerant of markdown bold).
-    2. Fall back to the first 5-tier rating word found anywhere in the text.
+    两阶段策略：
+    1. 查找显式的 "Rating: X" 标签（容忍 markdown 粗体）。
+    2. 回退到文本中任意位置找到的第一个 5 级评级词。
 
-    Returns a Title-cased rating string, or ``default`` if no rating word appears.
+    返回首字母大写的评级字符串，如果未找到评级词则返回 ``default``。
     """
     for line in text.splitlines():
         m = _RATING_LABEL_RE.search(line)

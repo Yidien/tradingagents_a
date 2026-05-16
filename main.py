@@ -1,19 +1,19 @@
 from tradingagents.graph.trading_graph import TradingAgentsGraph
 from tradingagents.default_config import DEFAULT_CONFIG
 
-# DEFAULT_CONFIG already applies TRADINGAGENTS_* env-var overrides
-# (llm_provider, deep_think_llm, quick_think_llm, backend_url, etc.),
-# so users can switch models or endpoints purely via .env without
-# editing this script. Override individual keys here only when you
-# want a hard-coded value that should ignore the environment.
+# DEFAULT_CONFIG 已经应用了 TRADINGAGENTS_* 环境变量覆盖
+# (llm_provider, deep_think_llm, quick_think_llm, backend_url 等)，
+# 因此用户可以通过 .env 文件切换模型或端点，而无需
+# 编辑此脚本。仅当你想要忽略环境的硬编码值时，
+# 才在此处覆盖单个键。
 config = DEFAULT_CONFIG.copy()
 
-# Initialize with custom config
+# 使用自定义配置初始化
 ta = TradingAgentsGraph(debug=True, config=config)
 
-# forward propagate
+# 前向传播
 _, decision = ta.propagate("NVDA", "2024-05-10")
 print(decision)
 
-# Memorize mistakes and reflect
-# ta.reflect_and_remember(1000) # parameter is the position returns
+# 记忆错误并反思
+# ta.reflect_and_remember(1000) # 参数是仓位回报
