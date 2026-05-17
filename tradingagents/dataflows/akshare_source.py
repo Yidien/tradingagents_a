@@ -1,5 +1,7 @@
 """akshare-based A-share stock data, indicators, and financial statements.
 
+Data sources: East Money (东方财富), Tonghuashun (同花顺).
+
 Drop-in replacement for y_finance.py when ``data_vendors`` is set to
 ``akshare``. Follows the same function signatures so ``interface.py``
 can route to this module without any other changes.
@@ -42,14 +44,14 @@ def _normalise_ticker(symbol: str) -> str:
     return upper
 
 
-def _sina_prefix(code: str) -> str:
-    """Convert 6-digit A-share code to Sina prefix format.
+def _to_em_symbol(code: str) -> str:
+    """Convert 6-digit code to East Money format.
 
-    ``600519`` → ``sh600519``, ``000001`` → ``sz000001``
+    ``600519`` → ``SH600519``, ``000001`` → ``SZ000001``
     """
     if code.startswith("6"):
-        return f"sh{code}"
-    return f"sz{code}"
+        return f"SH{code}"
+    return f"SZ{code}"
 
 
 def _is_a_share(symbol: str) -> bool:
@@ -77,7 +79,7 @@ def _ak_retry(func, max_retries=2, base_delay=3.0):
 
 
 # ---------------------------------------------------------------------------
-# OHLCV stock data
+# OHLCV stock data — East Money (东方财富)
 # ---------------------------------------------------------------------------
 
 def get_akshare_data_online(
@@ -85,12 +87,13 @@ def get_akshare_data_online(
     start_date: Annotated[str, "Start date in yyyy-mm-dd format"],
     end_date: Annotated[str, "End date in yyyy-mm-dd format"],
 ) -> str:
-    """Fetch A-share OHLCV data from akshare.
+    """Fetch A-share OHLCV data from East Money via akshare.
 
     Signature mirrors :func:`y_finance.get_YFin_data_online` exactly so
     ``interface.py`` can route here via ``VENDOR_METHODS``.
+
+    Source: East Money (东方财富) — more authoritative than Sina for A-shares.
     """
-    # 容错处理：LLM 可能传 YYYYMMDD 格式
     parse_date(start_date)
     parse_date(end_date)
     start_date = parse_date(start_date).strftime("%Y-%m-%d")
@@ -100,8 +103,9 @@ def get_akshare_data_online(
 
     try:
         df = _ak_retry(
-            lambda: ak.stock_zh_a_daily(
-                symbol=_sina_prefix(code),
+            lambda: ak.stock_zh_a_hist(
+                symbol=code,
+                period="daily",
                 start_date=start_date.replace("-", ""),
                 end_date=end_date.replace("-", ""),
                 adjust="qfq",
@@ -117,14 +121,14 @@ def get_akshare_data_online(
             f"No data found for symbol '{symbol}' between {start_date} and {end_date}"
         )
 
-    # stock_zh_a_daily (Sina) columns: date, open, high, close, low, volume, amount, ...
+    # stock_zh_a_hist (East Money) columns: 日期, 股票代码, 开盘, 收盘, 最高, 最低, 成交量, ...
     col_map = {
-        "date": "Date",
-        "open": "Open",
-        "close": "Close",
-        "high": "High",
-        "low": "Low",
-        "volume": "Volume",
+        "日期": "Date",
+        "开盘": "Open",
+        "收盘": "Close",
+        "最高": "High",
+        "最低": "Low",
+        "成交量": "Volume",
     }
     df = df.rename(columns={k: v for k, v in col_map.items() if k in df.columns})
 
@@ -150,7 +154,7 @@ def get_akshare_data_online(
         f"# Stock data for {symbol} from {start_date} to {end_date}\n"
         f"# Total records: {len(df)}\n"
         f"# Data retrieved on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
-        f"# Source: akshare (前复权)\n\n"
+        f"# Source: akshare (East Money, 前复权)\n\n"
     )
     return header + csv_string
 
@@ -168,7 +172,7 @@ def get_stock_stats_indicators_akshare(
     """Compute technical indicators for A-shares.
 
     Reuses the same indicator descriptions and stockstats computation
-    as yfinance but feeds akshare-derived OHLCV into :mod:`stockstats`.
+    as yfinance but feeds East Money-derived OHLCV into :mod:`stockstats`.
     """
     indicator_descriptions = {
         "close_50_sma": "50 SMA: A medium-term trend indicator. Usage: Identify trend direction and serve as dynamic support/resistance. Tips: It lags price; combine with faster indicators for timely signals.",
@@ -234,7 +238,7 @@ def get_stock_stats_indicators_akshare(
 
 
 def _get_akshare_stock_stats_bulk(symbol: str, indicator: str, curr_date: str) -> dict:
-    """Calculate indicator for all available dates using akshare-sourced OHLCV."""
+    """Calculate indicator for all available dates using East Money OHLCV."""
     from stockstats import wrap
     data = _load_ohclv_akshare(symbol, curr_date)
     df = wrap(data)
@@ -250,9 +254,9 @@ def _get_akshare_stock_stats_bulk(symbol: str, indicator: str, curr_date: str) -
 
 
 def _load_ohclv_akshare(symbol: str, curr_date: str) -> pd.DataFrame:
-    """Load OHLCV from akshare cache (or fetch if missing), filtered to curr_date.
+    """Load OHLCV from East Money cache (or fetch if missing), filtered to curr_date.
 
-    Mirrors :func:`stockstats_utils.load_ohlcv` but uses akshare.
+    Mirrors :func:`stockstats_utils.load_ohlcv` but uses East Money via akshare.
     """
     from .utils import safe_ticker_component
 
@@ -276,36 +280,42 @@ def _load_ohclv_akshare(symbol: str, curr_date: str) -> pd.DataFrame:
         except Exception:
             pass
 
-    # Fetch from akshare (Sina source)
+    # Fetch from East Money (东方财富)
     try:
         end_str = curr_date_dt.strftime("%Y%m%d")
         start_str = (curr_date_dt - relativedelta(years=10)).strftime("%Y%m%d")
         df = _ak_retry(
-            lambda: ak.stock_zh_a_daily(
-                symbol=_sina_prefix(code),
-                start_date=start_str, end_date=end_str, adjust="qfq",
+            lambda: ak.stock_zh_a_hist(
+                symbol=code,
+                period="daily",
+                start_date=start_str,
+                end_date=end_str,
+                adjust="qfq",
             )
         )
     except Exception:
         try:
             start_str = (curr_date_dt - relativedelta(years=3)).strftime("%Y%m%d")
             df = _ak_retry(
-                lambda: ak.stock_zh_a_daily(
-                    symbol=_sina_prefix(code),
-                    start_date=start_str, end_date=end_str, adjust="qfq",
+                lambda: ak.stock_zh_a_hist(
+                    symbol=code,
+                    period="daily",
+                    start_date=start_str,
+                    end_date=end_str,
+                    adjust="qfq",
                 )
             )
         except Exception as e:
             raise RuntimeError(f"akshare OHLCV fetch failed for {symbol}: {e}")
 
-    # Normalise column names from stock_zh_a_daily (Sina)
+    # Normalise column names from stock_zh_a_hist (East Money)
     col_map = {
-        "date": "Date",
-        "open": "Open",
-        "high": "High",
-        "low": "Low",
-        "close": "Close",
-        "volume": "Volume",
+        "日期": "Date",
+        "开盘": "Open",
+        "最高": "High",
+        "最低": "Low",
+        "收盘": "Close",
+        "成交量": "Volume",
     }
     df = df.rename(columns={k: v for k, v in col_map.items() if k in df.columns})
     for col in ("Open", "High", "Low", "Close", "Volume"):
@@ -325,14 +335,14 @@ def _load_ohclv_akshare(symbol: str, curr_date: str) -> pd.DataFrame:
 
 
 # ---------------------------------------------------------------------------
-# Fundamentals
+# Fundamentals — East Money (东方财富)
 # ---------------------------------------------------------------------------
 
 def get_fundamentals_akshare(
     ticker: Annotated[str, "ticker symbol of the company"],
     curr_date: Annotated[str, "current date (not used for akshare)"] = None,
 ) -> str:
-    """Get A-share company fundamentals from akshare East Money data."""
+    """Get A-share company fundamentals from East Money via akshare."""
     code = _normalise_ticker(ticker)
     try:
         info = _ak_retry(lambda: ak.stock_individual_info_em(symbol=code))
@@ -373,24 +383,27 @@ def get_fundamentals_akshare(
     return "\n".join(lines)
 
 
+# ---------------------------------------------------------------------------
+# Financial Statements — East Money (东方财富)
+# ---------------------------------------------------------------------------
+
 def get_balance_sheet_akshare(
     ticker: Annotated[str, "ticker symbol of the company"],
     freq: Annotated[str, "frequency: 'annual' or 'quarterly'"] = "quarterly",
     curr_date: Annotated[str, "current date in YYYY-MM-DD format"] = None,
 ) -> str:
-    """Get A-share balance sheet from Sina via akshare."""
+    """Get A-share balance sheet from East Money via akshare."""
     code = _normalise_ticker(ticker)
+    em_sym = _to_em_symbol(code)
     try:
-        df = _ak_retry(lambda: ak.stock_financial_report_sina(
-            stock=_sina_prefix(code), symbol="资产负债表",
-        ))
+        df = _ak_retry(lambda: ak.stock_balance_sheet_by_report_em(symbol=em_sym))
     except Exception as e:
         return f"Error retrieving balance sheet for {ticker}: {e}"
 
     if df is None or df.empty:
         return f"No balance sheet data found for '{ticker}'"
 
-    return _format_financial_sina("Balance Sheet", ticker, df, curr_date)
+    return _format_financial_em("Balance Sheet", ticker, df, curr_date)
 
 
 def get_cashflow_akshare(
@@ -398,19 +411,18 @@ def get_cashflow_akshare(
     freq: Annotated[str, "frequency: 'annual' or 'quarterly'"] = "quarterly",
     curr_date: Annotated[str, "current date in YYYY-MM-DD format"] = None,
 ) -> str:
-    """Get A-share cash flow from Sina via akshare."""
+    """Get A-share cash flow from East Money via akshare."""
     code = _normalise_ticker(ticker)
+    em_sym = _to_em_symbol(code)
     try:
-        df = _ak_retry(lambda: ak.stock_financial_report_sina(
-            stock=_sina_prefix(code), symbol="现金流量表",
-        ))
+        df = _ak_retry(lambda: ak.stock_cash_flow_sheet_by_report_em(symbol=em_sym))
     except Exception as e:
         return f"Error retrieving cash flow for {ticker}: {e}"
 
     if df is None or df.empty:
         return f"No cash flow data found for '{ticker}'"
 
-    return _format_financial_sina("Cash Flow", ticker, df, curr_date)
+    return _format_financial_em("Cash Flow", ticker, df, curr_date)
 
 
 def get_income_statement_akshare(
@@ -418,48 +430,95 @@ def get_income_statement_akshare(
     freq: Annotated[str, "frequency: 'annual' or 'quarterly'"] = "quarterly",
     curr_date: Annotated[str, "current date in YYYY-MM-DD format"] = None,
 ) -> str:
-    """Get A-share income statement from Sina via akshare."""
+    """Get A-share income statement (profit sheet) from East Money via akshare."""
     code = _normalise_ticker(ticker)
+    em_sym = _to_em_symbol(code)
     try:
-        df = _ak_retry(lambda: ak.stock_financial_report_sina(
-            stock=_sina_prefix(code), symbol="利润表",
-        ))
+        df = _ak_retry(lambda: ak.stock_profit_sheet_by_report_em(symbol=em_sym))
     except Exception as e:
         return f"Error retrieving income statement for {ticker}: {e}"
 
     if df is None or df.empty:
         return f"No income statement data found for '{ticker}'"
 
-    return _format_financial_sina("Income Statement", ticker, df, curr_date)
+    return _format_financial_em("Income Statement", ticker, df, curr_date)
 
 
-def _format_financial_sina(sheet_type: str, ticker: str, df: pd.DataFrame, curr_date: str = None) -> str:
-    """Format a Sina financial statement DataFrame for prompt injection.
+def _format_financial_em(sheet_type: str, ticker: str, df: pd.DataFrame, curr_date: str = None) -> str:
+    """Format an East Money financial statement DataFrame for prompt injection.
 
-    Sina's format: first column is 报告日 (report dates), other columns
-    are financial items. Each row is one reporting period.
+    East Money format: columns include SECUCODE, SECURITY_CODE, SECURITY_NAME_ABBR,
+    ORG_CODE, ORG_TYPE, REPORT_DATE, and financial items.
     """
-    # Rename first column
-    first_col = df.columns[0]
-    df = df.rename(columns={first_col: "报告日期"})
+    # Use REPORT_DATE column for date filtering
+    date_col = None
+    for col in df.columns:
+        if "REPORT_DATE" in str(col).upper():
+            date_col = col
+            break
 
-    # Filter by date if provided
-    if curr_date:
-        df["报告日期"] = pd.to_datetime(df["报告日期"])
+    if date_col and curr_date:
+        df[date_col] = pd.to_datetime(df[date_col])
         curr = pd.to_datetime(curr_date)
-        df = df[df["报告日期"] <= curr]
+        df = df[df[date_col] <= curr]
 
-    if df.empty:
+    # Drop internal metadata columns to reduce noise
+    meta_cols = {"SECUCODE", "SECURITY_CODE", "SECURITY_NAME_ABBR", "ORG_CODE", "ORG_TYPE"}
+    df_display = df.drop(columns=[c for c in meta_cols if c in df.columns], errors="ignore")
+
+    if df_display.empty:
         return f"No {sheet_type} data found for '{ticker}' up to {curr_date}"
 
-    csv_string = df.to_csv(index=False)
+    csv_string = df_display.to_csv(index=False)
     header = (
         f"# {sheet_type} data for {ticker}\n"
         f"# Data retrieved on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
-        f"# Source: akshare (Sina)\n\n"
+        f"# Source: akshare (East Money)\n\n"
     )
     return header + csv_string
 
+
+# ---------------------------------------------------------------------------
+# Profit Forecast — Tonghuashun (同花顺)
+# ---------------------------------------------------------------------------
+
+def get_profit_forecast_akshare(
+    ticker: Annotated[str, "ticker symbol of the company"],
+    curr_date: Annotated[str, "current date in YYYY-MM-DD format"] = None,
+) -> str:
+    """Get A-share profit forecast (机构盈利预测) from Tonghuashun via akshare.
+
+    Returns analyst consensus earnings forecasts from Tonghuashun (同花顺),
+    including forecasted annual EPS and net profit from institutional analysts.
+    """
+    code = _normalise_ticker(ticker)
+
+    blocks = []
+    for indicator, label in [("预测年报每股收益", "EPS Forecast"),
+                              ("预测年报净利润", "Net Profit Forecast")]:
+        try:
+            df = _ak_retry(lambda: ak.stock_profit_forecast_ths(
+                symbol=code, indicator=indicator,
+            ))
+            if df is not None and not df.empty:
+                blocks.append(f"## {label} (Tonghuashun):\n{df.to_csv(index=False)}")
+        except Exception as e:
+            logger.warning("Tonghuashun %s fetch failed for %s: %s", indicator, ticker, e)
+
+    if not blocks:
+        return f"No profit forecast data found for '{ticker}' from Tonghuashun"
+
+    header = (
+        f"# Profit Forecast for {ticker}\n"
+        f"# Data retrieved on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+        f"# Source: akshare (Tonghuashun)\n\n"
+    )
+    return header + "\n\n".join(blocks)
+
+
+# ---------------------------------------------------------------------------
+# Insider Transactions
+# ---------------------------------------------------------------------------
 
 def get_insider_transactions_akshare(
     ticker: Annotated[str, "ticker symbol of the company"],
