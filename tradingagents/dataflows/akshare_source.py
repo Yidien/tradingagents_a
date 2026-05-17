@@ -64,6 +64,17 @@ def _sina_prefix(code: str) -> str:
     return f"sz{code}"
 
 
+def _tx_prefix(code: str) -> str:
+    """Convert 6-digit A-share code to Tencent (腾讯) prefix format.
+
+    ``600519`` → ``sh600519``, ``000001`` → ``sz000001``
+    Same as Sina format.
+    """
+    if code.startswith("6"):
+        return f"sh{code}"
+    return f"sz{code}"
+
+
 def _is_a_share(symbol: str) -> bool:
     """Return True if *symbol* looks like an A-share ticker."""
     code = _normalise_ticker(symbol)
@@ -97,12 +108,13 @@ def get_akshare_data_online(
     start_date: Annotated[str, "Start date in yyyy-mm-dd format"],
     end_date: Annotated[str, "End date in yyyy-mm-dd format"],
 ) -> str:
-    """Fetch A-share OHLCV data from East Money via akshare.
+    """Fetch A-share OHLCV data from Tencent (腾讯) via akshare.
 
     Signature mirrors :func:`y_finance.get_YFin_data_online` exactly so
     ``interface.py`` can route here via ``VENDOR_METHODS``.
 
-    Source: East Money (东方财富) — more authoritative than Sina for A-shares.
+    Source: Tencent Finance (腾讯财经) — proxy.finance.qq.com,
+    falls back to Sina (新浪) on connection failure.
     """
     parse_date(start_date)
     parse_date(end_date)
@@ -111,29 +123,28 @@ def get_akshare_data_online(
 
     code = _normalise_ticker(symbol)
 
-    # Try East Money first, fall back to Sina on connection failure
+    # Try Tencent (腾讯) first — more reliable than East Money in some networks
     try:
         df = _ak_retry(
-            lambda: ak.stock_zh_a_hist(
-                symbol=code,
-                period="daily",
+            lambda: ak.stock_zh_a_hist_tx(
+                symbol=_tx_prefix(code),
                 start_date=start_date.replace("-", ""),
                 end_date=end_date.replace("-", ""),
                 adjust="qfq",
             )
         )
-        source = "East Money"
-        # stock_zh_a_hist (East Money) columns
+        source = "Tencent"
+        # stock_zh_a_hist_tx (Tencent) columns: date, open, close, high, low, amount
         col_map = {
-            "日期": "Date",
-            "开盘": "Open",
-            "收盘": "Close",
-            "最高": "High",
-            "最低": "Low",
-            "成交量": "Volume",
+            "date": "Date",
+            "open": "Open",
+            "close": "Close",
+            "high": "High",
+            "low": "Low",
+            "amount": "Volume",  # Tencent uses "amount" (成交额), not volume
         }
-    except Exception as em_err:
-        logger.warning("East Money OHLCV failed, falling back to Sina: %s", em_err)
+    except Exception as tx_err:
+        logger.warning("Tencent OHLCV failed, falling back to Sina: %s", tx_err)
         try:
             df = _ak_retry(
                 lambda: ak.stock_zh_a_daily(
@@ -144,7 +155,7 @@ def get_akshare_data_online(
                 )
             )
             source = "Sina (fallback)"
-            # stock_zh_a_daily (Sina) columns
+            # stock_zh_a_daily (Sina) columns: date, open, close, high, low, volume
             col_map = {
                 "date": "Date",
                 "open": "Open",
@@ -156,7 +167,7 @@ def get_akshare_data_online(
         except Exception as sina_err:
             return (
                 f"Error fetching stock data for '{symbol}' from akshare: "
-                f"East Money: {em_err}; Sina fallback: {sina_err}"
+                f"Tencent: {tx_err}; Sina fallback: {sina_err}"
             )
 
     if df is None or df.empty:
@@ -314,29 +325,28 @@ def _load_ohclv_akshare(symbol: str, curr_date: str) -> pd.DataFrame:
         except Exception:
             pass
 
-    # Fetch from East Money (东方财富), fall back to Sina on connection failure
+    # Fetch from Tencent (腾讯), fall back to Sina
     try:
         end_str = curr_date_dt.strftime("%Y%m%d")
         start_str = (curr_date_dt - relativedelta(years=10)).strftime("%Y%m%d")
         df = _ak_retry(
-            lambda: ak.stock_zh_a_hist(
-                symbol=code,
-                period="daily",
+            lambda: ak.stock_zh_a_hist_tx(
+                symbol=_tx_prefix(code),
                 start_date=start_str,
                 end_date=end_str,
                 adjust="qfq",
             )
         )
         col_map = {
-            "日期": "Date",
-            "开盘": "Open",
-            "最高": "High",
-            "最低": "Low",
-            "收盘": "Close",
-            "成交量": "Volume",
+            "date": "Date",
+            "open": "Open",
+            "high": "High",
+            "low": "Low",
+            "close": "Close",
+            "amount": "Volume",
         }
-    except Exception as em_err:
-        logger.warning("East Money OHLCV (bulk) failed, falling back to Sina: %s", em_err)
+    except Exception as tx_err:
+        logger.warning("Tencent OHLCV (bulk) failed, falling back to Sina: %s", tx_err)
         try:
             end_str = curr_date_dt.strftime("%Y%m%d")
             start_str = (curr_date_dt - relativedelta(years=10)).strftime("%Y%m%d")
