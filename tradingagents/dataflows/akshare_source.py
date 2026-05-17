@@ -54,6 +54,16 @@ def _to_em_symbol(code: str) -> str:
     return f"SZ{code}"
 
 
+def _sina_prefix(code: str) -> str:
+    """Convert 6-digit A-share code to Sina prefix format (kept for fallback).
+
+    ``600519`` → ``sh600519``, ``000001`` → ``sz000001``
+    """
+    if code.startswith("6"):
+        return f"sh{code}"
+    return f"sz{code}"
+
+
 def _is_a_share(symbol: str) -> bool:
     """Return True if *symbol* looks like an A-share ticker."""
     code = _normalise_ticker(symbol)
@@ -101,6 +111,7 @@ def get_akshare_data_online(
 
     code = _normalise_ticker(symbol)
 
+    # Try East Money first, fall back to Sina on connection failure
     try:
         df = _ak_retry(
             lambda: ak.stock_zh_a_hist(
@@ -111,25 +122,48 @@ def get_akshare_data_online(
                 adjust="qfq",
             )
         )
-    except Exception as e:
-        return (
-            f"Error fetching stock data for '{symbol}' from akshare: {e}"
-        )
+        source = "East Money"
+        # stock_zh_a_hist (East Money) columns
+        col_map = {
+            "日期": "Date",
+            "开盘": "Open",
+            "收盘": "Close",
+            "最高": "High",
+            "最低": "Low",
+            "成交量": "Volume",
+        }
+    except Exception as em_err:
+        logger.warning("East Money OHLCV failed, falling back to Sina: %s", em_err)
+        try:
+            df = _ak_retry(
+                lambda: ak.stock_zh_a_daily(
+                    symbol=_sina_prefix(code),
+                    start_date=start_date.replace("-", ""),
+                    end_date=end_date.replace("-", ""),
+                    adjust="qfq",
+                )
+            )
+            source = "Sina (fallback)"
+            # stock_zh_a_daily (Sina) columns
+            col_map = {
+                "date": "Date",
+                "open": "Open",
+                "close": "Close",
+                "high": "High",
+                "low": "Low",
+                "volume": "Volume",
+            }
+        except Exception as sina_err:
+            return (
+                f"Error fetching stock data for '{symbol}' from akshare: "
+                f"East Money: {em_err}; Sina fallback: {sina_err}"
+            )
 
     if df is None or df.empty:
         return (
             f"No data found for symbol '{symbol}' between {start_date} and {end_date}"
         )
 
-    # stock_zh_a_hist (East Money) columns: 日期, 股票代码, 开盘, 收盘, 最高, 最低, 成交量, ...
-    col_map = {
-        "日期": "Date",
-        "开盘": "Open",
-        "收盘": "Close",
-        "最高": "High",
-        "最低": "Low",
-        "成交量": "Volume",
-    }
     df = df.rename(columns={k: v for k, v in col_map.items() if k in df.columns})
 
     # Ensure required columns exist
@@ -154,7 +188,7 @@ def get_akshare_data_online(
         f"# Stock data for {symbol} from {start_date} to {end_date}\n"
         f"# Total records: {len(df)}\n"
         f"# Data retrieved on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
-        f"# Source: akshare (East Money, 前复权)\n\n"
+        f"# Source: akshare ({source}, 前复权)\n\n"
     )
     return header + csv_string
 
@@ -280,7 +314,7 @@ def _load_ohclv_akshare(symbol: str, curr_date: str) -> pd.DataFrame:
         except Exception:
             pass
 
-    # Fetch from East Money (东方财富)
+    # Fetch from East Money (东方财富), fall back to Sina on connection failure
     try:
         end_str = curr_date_dt.strftime("%Y%m%d")
         start_str = (curr_date_dt - relativedelta(years=10)).strftime("%Y%m%d")
@@ -293,30 +327,54 @@ def _load_ohclv_akshare(symbol: str, curr_date: str) -> pd.DataFrame:
                 adjust="qfq",
             )
         )
-    except Exception:
+        col_map = {
+            "日期": "Date",
+            "开盘": "Open",
+            "最高": "High",
+            "最低": "Low",
+            "收盘": "Close",
+            "成交量": "Volume",
+        }
+    except Exception as em_err:
+        logger.warning("East Money OHLCV (bulk) failed, falling back to Sina: %s", em_err)
         try:
-            start_str = (curr_date_dt - relativedelta(years=3)).strftime("%Y%m%d")
+            end_str = curr_date_dt.strftime("%Y%m%d")
+            start_str = (curr_date_dt - relativedelta(years=10)).strftime("%Y%m%d")
             df = _ak_retry(
-                lambda: ak.stock_zh_a_hist(
-                    symbol=code,
-                    period="daily",
-                    start_date=start_str,
-                    end_date=end_str,
-                    adjust="qfq",
+                lambda: ak.stock_zh_a_daily(
+                    symbol=_sina_prefix(code),
+                    start_date=start_str, end_date=end_str, adjust="qfq",
                 )
             )
-        except Exception as e:
-            raise RuntimeError(f"akshare OHLCV fetch failed for {symbol}: {e}")
+            col_map = {
+                "date": "Date",
+                "open": "Open",
+                "high": "High",
+                "low": "Low",
+                "close": "Close",
+                "volume": "Volume",
+            }
+        except Exception:
+            try:
+                start_str = (curr_date_dt - relativedelta(years=3)).strftime("%Y%m%d")
+                df = _ak_retry(
+                    lambda: ak.stock_zh_a_daily(
+                        symbol=_sina_prefix(code),
+                        start_date=start_str, end_date=end_str, adjust="qfq",
+                    )
+                )
+                col_map = {
+                    "date": "Date",
+                    "open": "Open",
+                    "high": "High",
+                    "low": "Low",
+                    "close": "Close",
+                    "volume": "Volume",
+                }
+            except Exception as e:
+                raise RuntimeError(f"akshare OHLCV fetch failed for {symbol}: {e}")
 
-    # Normalise column names from stock_zh_a_hist (East Money)
-    col_map = {
-        "日期": "Date",
-        "开盘": "Open",
-        "最高": "High",
-        "最低": "Low",
-        "收盘": "Close",
-        "成交量": "Volume",
-    }
+    # Normalise column names
     df = df.rename(columns={k: v for k, v in col_map.items() if k in df.columns})
     for col in ("Open", "High", "Low", "Close", "Volume"):
         if col not in df.columns:
@@ -342,20 +400,43 @@ def get_fundamentals_akshare(
     ticker: Annotated[str, "ticker symbol of the company"],
     curr_date: Annotated[str, "current date (not used for akshare)"] = None,
 ) -> str:
-    """Get A-share company fundamentals from East Money via akshare."""
+    """Get A-share company fundamentals from East Money via akshare.
+
+    Falls back to extracting key fields from stock_financial_analysis_indicator_em
+    when stock_individual_info_em is unreachable.
+    """
     code = _normalise_ticker(ticker)
+    em_sym = _to_em_symbol(code)
+
+    # Try stock_individual_info_em first (richest data)
     try:
         info = _ak_retry(lambda: ak.stock_individual_info_em(symbol=code))
+        if info is not None and not info.empty:
+            return _format_individual_info(ticker, info)
     except Exception as e:
-        return f"Error retrieving fundamentals for {ticker} from akshare: {e}"
+        logger.warning(
+            "stock_individual_info_em failed for %s, falling back to "
+            "financial_analysis_indicator: %s", ticker, e
+        )
 
-    if info is None or info.empty:
-        return f"No fundamentals data found for symbol '{ticker}'"
+    # Fallback: extract from financial analysis indicator (more reliable API)
+    try:
+        df = _ak_retry(lambda: ak.stock_financial_analysis_indicator_em(
+            symbol=f"{code}.SH" if code.startswith("6") else f"{code}.SZ",
+            indicator="按报告期",
+        ))
+        if df is not None and not df.empty:
+            return _format_financial_analysis_as_fundamentals(ticker, df)
+    except Exception as e2:
+        logger.warning("Financial analysis fallback also failed for %s: %s", ticker, e2)
 
-    # akshare returns a DataFrame with columns: item, value
+    return f"Error retrieving fundamentals for {ticker} from akshare (all sources failed)"
+
+
+def _format_individual_info(ticker: str, info: pd.DataFrame) -> str:
+    """Format stock_individual_info_em output."""
     info_dict = dict(zip(info["item"], info["value"])) if "item" in info.columns else {}
 
-    # Map common fields
     field_map = {
         "总市值": "Market Cap",
         "流通市值": "Circulating Market Cap",
@@ -373,12 +454,85 @@ def get_fundamentals_akshare(
         if val is not None:
             lines.append(f"{en_label}: {val}")
 
-    # Also include any other items
     for _, row in info.iterrows():
         item = row.get("item", "")
         val = row.get("value", "")
         if item not in field_map and val is not None:
             lines.append(f"{item}: {val}")
+
+    return "\n".join(lines)
+
+
+def _format_financial_analysis_as_fundamentals(ticker: str, df: pd.DataFrame) -> str:
+    """Extract key fundamental indicators from financial analysis table.
+
+    stock_financial_analysis_indicator_em returns ~141 columns of financial data
+    with abbreviated pinyin column codes. We pick the most recent report row
+    and surface key indicators with human-readable labels.
+    """
+    latest = df.iloc[0]
+    report_date = latest.get("REPORT_DATE", latest.iloc[5])
+    name = latest.get("SECURITY_NAME_ABBR", ticker)
+
+    lines = [
+        f"# Company Fundamentals for {ticker} ({name})",
+        f"# Source: akshare (East Money, financial analysis indicator)",
+        f"# Latest Report: {report_date}",
+        "",
+    ]
+
+    # Column code → human-readable label (Chinese + English)
+    indicator_map = [
+        ("EPSJB",              "EPS (Basic) / 基本每股收益"),
+        ("EPSKCJB",            "EPS (Deducted) / 扣非每股收益"),
+        ("BPS",                "BPS / 每股净资产"),
+        ("TOTALOPERATEREVE",    "Revenue / 营业总收入"),
+        ("PARENTNETPROFIT",     "Net Profit (Parent) / 归母净利润"),
+        ("MLR",                "Gross Margin / 毛利率"),
+        ("XSMLL",              "Sales Gross Margin / 销售毛利率"),
+        ("ROEJQ",              "ROE (Weighted) / 加权净资产收益率"),
+        ("ROIC",               "ROIC / 投入资本回报率"),
+        ("TOTAL_ROI",          "Total ROI / 总资产回报率"),
+        ("ZZCJLL",             "Asset Turnover / 总资产周转率"),
+        ("ZCFZL",              "Debt-to-Assets / 资产负债率"),
+        ("LD",                 "Current Ratio / 流动比率"),
+        ("SD",                 "Quick Ratio / 速动比率"),
+        ("JYXJLYYSR",          "OCF/Revenue / 经营现金流营收比"),
+        ("MGJYXJJE",           "OCF Per Share / 每股经营现金流"),
+        ("YYZSRGDHBZC",        "Revenue YoY% / 营收同比增长"),
+        ("PARENTNETPROFITTZ",   "Net Profit YoY% / 归母净利润同比增长"),
+        ("TOTALOPERATEREVETZ",  "Revenue YoY (Adj) / 营业总收入同比"),
+        ("MGZBGJ",             "Capital Reserve PS / 每股资本公积"),
+        ("MGWFPLR",            "Undistributed Profit PS / 每股未分配利润"),
+        ("TAXRATE",            "Tax Rate / 税率"),
+        ("XJLLB",              "Cash Flow Ratio / 现金流比率"),
+        ("CURRENT_ASSET_TR",   "Current Asset TR / 流动资产周转率"),
+    ]
+
+    found = 0
+    for code, label in indicator_map:
+        val = latest.get(code)
+        if val is not None and not (isinstance(val, float) and pd.isna(val)):
+            if isinstance(val, float):
+                val = round(val, 4)
+            lines.append(f"  {label}: {val}")
+            found += 1
+
+    if found == 0:
+        # Fallback: dump all non-metadata columns from the latest row
+        skip = {"SECUCODE", "SECURITY_CODE", "SECURITY_NAME_ABBR",
+                "ORG_CODE", "ORG_TYPE", "REPORT_DATE", "REPORT_TYPE",
+                "REPORT_DATE_NAME", "SECURITY_TYPE_CODE", "NOTICE_DATE",
+                "UPDATE_DATE", "CURRENCY", "REPORT_YEAR", "IS_BZ"}
+        lines.append("  (All available indicators from latest report:)")
+        for col in df.columns:
+            if col in skip:
+                continue
+            val = latest.get(col)
+            if val is not None and not (isinstance(val, float) and pd.isna(val)):
+                if isinstance(val, float):
+                    val = round(val, 4)
+                lines.append(f"  {col}: {val}")
 
     return "\n".join(lines)
 
