@@ -90,6 +90,17 @@ DEFAULT_CONFIG = _apply_env_overrides({
         "贸易 关税 进出口 一带一路",
         "房地产 基建 投资 消费 新能源",
     ],
+    # Multi-source macro news configuration (A-share mode).
+    # Controls which sources contribute to get_global_news_akshare().
+    # Available: cctv(新闻联播), cls(财联社电报), eastmoney(东方财富全球财经),
+    #            tonghuashun(同花顺全球财经), baidu(百度经济日历)
+    "global_news_sources": [
+        "cctv",        # 新闻联播 — policy headlines (highest authority)
+        "cls",          # 财联社电报 — real-time A-share flash news
+        "eastmoney",    # 东方财富全球财经 — broad coverage
+        "tonghuashun",  # 同花顺全球财经 — complementary angle
+        "baidu",        # 百度经济日历 — global macro data calendar
+    ],
     # Data vendor configuration
     # Category-level configuration (default for all tools in category)
     # Set to "akshare" for A-share mode.

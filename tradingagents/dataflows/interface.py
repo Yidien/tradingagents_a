@@ -31,6 +31,7 @@ from .akshare_source import (
     get_cashflow_akshare,
     get_income_statement_akshare,
     get_insider_transactions_akshare,
+    get_profit_forecast_akshare,
 )
 from .akshare_news import get_news_akshare, get_global_news_akshare
 
@@ -57,7 +58,8 @@ TOOLS_CATEGORIES = {
             "get_fundamentals",
             "get_balance_sheet",
             "get_cashflow",
-            "get_income_statement"
+            "get_income_statement",
+            "get_profit_forecast",
         ]
     },
     "news_data": {
@@ -110,6 +112,10 @@ VENDOR_METHODS = {
         "alpha_vantage": get_alpha_vantage_income_statement,
         "yfinance": get_yfinance_income_statement,
         "akshare": get_income_statement_akshare,
+    },
+    # profit_forecast (Tonghuashun via akshare)
+    "get_profit_forecast": {
+        "akshare": get_profit_forecast_akshare,
     },
     # news_data
     "get_news": {
