@@ -1,4 +1,8 @@
-"""A-share TradingAgents runner — 一键配置 A 股数据源并启动分析。"""
+"""A-share TradingAgents runner — 一键配置 A 股数据源并启动分析。
+
+数据源: 东方财富(OHLCV/财报/新闻), 财联社(快讯), 同花顺(预测/新闻),
+       雪球(热度排行), 新闻联播(政策), 百度(经济日历)
+"""
 import os
 
 # === 缓存切到 D 盘 ===
@@ -12,11 +16,19 @@ config = DEFAULT_CONFIG.copy()
 config.update({
     # === 数据源全部走 akshare ===
     "data_vendors": {
-        "core_stock_apis": "akshare",
-        "technical_indicators": "akshare",
-        "fundamental_data": "akshare",
-        "news_data": "akshare",
+        "core_stock_apis": "akshare",       # 东财日K线
+        "technical_indicators": "akshare",   # 东财日K → stockstats
+        "fundamental_data": "akshare",       # 东财财报 + 同花顺盈利预测
+        "news_data": "akshare",              # 东财个股新闻
     },
+    # === 宏观新闻多源配置 ===
+    "global_news_sources": [
+        "cctv",         # 新闻联播 — 政策定调
+        "cls",          # 财联社电报 — 实时快讯
+        "eastmoney",    # 东方财富全球财经 — 覆盖面广
+        "tonghuashun",  # 同花顺全球财经 — 互补视角
+        "baidu",        # 百度经济日历 — 宏观数据
+    ],
     # === A股宏观新闻关键词（中文） ===
     "global_news_queries": [
         "央行 利率 货币政策",
