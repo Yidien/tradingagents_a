@@ -1,5 +1,8 @@
 """akshare-based news fetching for A-share stocks.
 
+Multi-source macro news: CCTV (新闻联播), CLS (财联社), East Money (东方财富),
+Tonghuashun (同花顺), Baidu economic calendar (百度经济日历).
+
 Drop-in replacement for :mod:`yfinance_news` when ``data_vendors`` is
 set to ``akshare``.
 """
@@ -116,13 +119,16 @@ def get_global_news_akshare(
     look_back_days: Optional[int] = None,
     limit: Optional[int] = None,
 ) -> str:
-    """Retrieve macro news from Baidu Economic Calendar + CCTV news.
+    """Retrieve macro news from multiple A-share authoritative sources.
 
-    Combines two non-East Money sources:
-    1. ``news_economic_baidu`` — global economic events with actual/forecast values
-    2. ``news_cctv`` — Chinese policy/headlines from national TV news
+    Sources (configurable via ``global_news_sources``):
+    1. ``news_cctv`` — 新闻联播 (policy headlines, highest authority)
+    2. ``stock_info_global_cls`` — 财联社电报 (real-time A-share flash news)
+    3. ``stock_info_global_em`` — 东方财富全球财经 (broad coverage)
+    4. ``stock_info_global_ths`` — 同花顺全球财经 (complementary angle)
+    5. ``news_economic_baidu`` — 百度经济日历 (global macro data calendar)
 
-    Falls back gracefully if either source fails.
+    Falls back gracefully if any source fails.
     """
     config = get_config()
     if look_back_days is None:
@@ -130,23 +136,57 @@ def get_global_news_akshare(
     if limit is None:
         limit = config.get("global_news_article_limit", 10)
 
+    # Which sources to include (default: all)
+    sources = config.get("global_news_sources", [
+        "cctv", "cls", "eastmoney", "tonghuashun", "baidu",
+    ])
+
     blocks = []
 
-    # --- Source 1: CCTV news (policy headlines) ---
-    try:
-        cctv_block = _fetch_cctv_news(curr_date)
-        if cctv_block:
-            blocks.append(cctv_block)
-    except Exception as e:
-        logger.warning("CCTV news fetch failed: %s", e)
+    # --- Source 1: CCTV news (新闻联播) — policy headlines ---
+    if "cctv" in sources:
+        try:
+            cctv_block = _fetch_cctv_news(curr_date)
+            if cctv_block:
+                blocks.append(cctv_block)
+        except Exception as e:
+            logger.warning("CCTV news fetch failed: %s", e)
 
-    # --- Source 2: Baidu economic calendar ---
-    try:
-        baidu_block = _fetch_baidu_economic(curr_date, look_back_days, limit // 2)
-        if baidu_block:
-            blocks.append(baidu_block)
-    except Exception as e:
-        logger.warning("Baidu economic news fetch failed: %s", e)
+    # --- Source 2: CLS telegraph (财联社电报) — real-time flash news ---
+    if "cls" in sources:
+        try:
+            cls_block = _fetch_cls_news(limit)
+            if cls_block:
+                blocks.append(cls_block)
+        except Exception as e:
+            logger.warning("CLS news fetch failed: %s", e)
+
+    # --- Source 3: East Money global (东方财富全球财经) — broad coverage ---
+    if "eastmoney" in sources:
+        try:
+            em_block = _fetch_eastmoney_global_news(limit)
+            if em_block:
+                blocks.append(em_block)
+        except Exception as e:
+            logger.warning("East Money global news fetch failed: %s", e)
+
+    # --- Source 4: Tonghuashun global (同花顺全球财经) — complementary ---
+    if "tonghuashun" in sources:
+        try:
+            ths_block = _fetch_tonghuashun_global_news(limit)
+            if ths_block:
+                blocks.append(ths_block)
+        except Exception as e:
+            logger.warning("Tonghuashun global news fetch failed: %s", e)
+
+    # --- Source 5: Baidu economic calendar (百度经济日历) — structured macro data ---
+    if "baidu" in sources:
+        try:
+            baidu_block = _fetch_baidu_economic(curr_date, look_back_days, limit // 2)
+            if baidu_block:
+                blocks.append(baidu_block)
+        except Exception as e:
+            logger.warning("Baidu economic news fetch failed: %s", e)
 
     if not blocks:
         return (
@@ -234,5 +274,112 @@ def _fetch_baidu_economic(curr_date: str, look_back_days: int, limit: int) -> st
         count += 1
         if count >= limit:
             break
+
+    return "\n".join(lines) if count > 0 else ""
+
+
+def _fetch_cls_news(limit: int) -> str:
+    """Fetch real-time flash news from CLS (财联社电报).
+
+    CLS is the most timely A-share news source — rolling telegraph-style
+    headlines covering policy, markets, and company announcements.
+    """
+    try:
+        df = _ak_retry(lambda: ak.stock_info_global_cls())
+    except Exception:
+        return ""
+
+    if df is None or df.empty:
+        return ""
+
+    lines = ["## 财联社电报 (CLS Flash News):\n"]
+    count = 0
+    for _, row in df.iterrows():
+        title = str(row.get("标题", row.iloc[0] if len(df.columns) > 0 else ""))
+        content = str(row.get("内容", row.iloc[1] if len(df.columns) > 1 else ""))
+        pub_time = str(row.get("发布日期", row.get("发布时间", "")))
+
+        if not title or title in ("nan", "None", ""):
+            continue
+
+        lines.append(f"### [{pub_time}] {title[:120]}")
+        if content and content not in ("nan", "None", ""):
+            lines.append(content[:400])
+        lines.append("")
+        count += 1
+        if count >= limit:
+            break
+
+    return "\n".join(lines) if count > 0 else ""
+
+
+def _fetch_eastmoney_global_news(limit: int) -> str:
+    """Fetch global financial news from East Money (东方财富全球财经).
+
+    Broad coverage including A-share, international, forex, commodities.
+    Returns ~200 articles; we take most recent.
+    """
+    try:
+        df = _ak_retry(lambda: ak.stock_info_global_em())
+    except Exception:
+        return ""
+
+    if df is None or df.empty:
+        return ""
+
+    lines = ["## 东方财富全球财经 (East Money Global):\n"]
+    count = 0
+    for _, row in df.head(limit).iterrows():
+        title = str(row.get("标题", ""))
+        summary = str(row.get("摘要", ""))
+        pub_time = str(row.get("发布时间", ""))
+        source = str(row.get("来源", ""))
+
+        if not title or title in ("nan", "None", ""):
+            continue
+
+        lines.append(f"### {title[:120]}")
+        meta = [pub_time, source] if source else [pub_time]
+        lines.append(f"*{' · '.join(meta)}*")
+        if summary and summary not in ("nan", "None", ""):
+            lines.append(summary[:400])
+        lines.append("")
+        count += 1
+
+    return "\n".join(lines) if count > 0 else ""
+
+
+def _fetch_tonghuashun_global_news(limit: int) -> str:
+    """Fetch global financial news from Tonghuashun (同花顺全球财经).
+
+    Complementary to East Money — different editorial angle, sometimes
+    different stories. Returns ~20 articles.
+    """
+    try:
+        df = _ak_retry(lambda: ak.stock_info_global_ths())
+    except Exception:
+        return ""
+
+    if df is None or df.empty:
+        return ""
+
+    lines = ["## 同花顺全球财经 (Tonghuashun Global):\n"]
+    count = 0
+    for _, row in df.head(limit).iterrows():
+        title = str(row.get("标题", ""))
+        content = str(row.get("内容", ""))
+        pub_time = str(row.get("发布时间", ""))
+        source = str(row.get("来源", ""))
+
+        if not title or title in ("nan", "None", ""):
+            continue
+
+        lines.append(f"### {title[:120]}")
+        meta = [pub_time, source] if source else [pub_time]
+        lines.append(f"*{' · '.join(meta)}*")
+        if content and content not in ("nan", "None", ""):
+            lines.append(content[:400])
+        lines.append("")
+        count += 1
 
     return "\n".join(lines) if count > 0 else ""
