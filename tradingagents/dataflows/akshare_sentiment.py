@@ -166,3 +166,77 @@ def fetch_reddit_posts(ticker: str, **kwargs) -> str:
 def fetch_stocktwits_messages(ticker: str, **kwargs) -> str:
     """Alias to fetch_akshare_stock_bar for A-share sentiment."""
     return fetch_akshare_stock_bar(ticker, **kwargs)
+
+
+# ---------------------------------------------------------------------------
+# Xueqiu (雪球) market-wide hot stock rankings
+# ---------------------------------------------------------------------------
+
+def fetch_xueqiu_hot_tweet_rank(limit: int = 30) -> str:
+    """Fetch Xueqiu hot discussion ranking (雪球讨论热度排行).
+
+    Returns the most actively discussed stocks across all of Xueqiu.
+    This is a market-wide sentiment heatmap — useful for gauging which
+    stocks are attracting retail investor attention.
+
+    Args:
+        limit: Max number of top stocks to include (default 30).
+    """
+    try:
+        df = _ak_retry(lambda: ak.stock_hot_tweet_xq(symbol="最热门"))
+    except Exception as e:
+        logger.warning("Xueqiu hot tweet fetch failed: %s", e)
+        return f"<Xueqiu hot discussion data unavailable: {e}>"
+
+    if df is None or df.empty:
+        return "<no Xueqiu hot discussion data found>"
+
+    lines = [
+        f"## Xueqiu Hot Discussion Ranking (雪球讨论热度排行):",
+        f"Top {min(limit, len(df))} most discussed stocks on Xueqiu:\n",
+    ]
+    for _, row in df.head(limit).iterrows():
+        code = str(row.get("股票代码", "?"))
+        name = str(row.get("股票简称", "?"))
+        followers = row.get("关注", "?")
+        latest_price = row.get("最新价", "?")
+        lines.append(
+            f"  {code} {name} | 关注:{followers} | 最新价:{latest_price}"
+        )
+
+    return "\n".join(lines)
+
+
+def fetch_xueqiu_hot_follow_rank(limit: int = 30) -> str:
+    """Fetch Xueqiu hot follow ranking (雪球关注热度排行).
+
+    Returns the most followed stocks on Xueqiu — a longer-term measure
+    of retail investor interest vs the discussion ranking which is
+    more event-driven.
+
+    Args:
+        limit: Max number of top stocks to include (default 30).
+    """
+    try:
+        df = _ak_retry(lambda: ak.stock_hot_follow_xq(symbol="最热门"))
+    except Exception as e:
+        logger.warning("Xueqiu hot follow fetch failed: %s", e)
+        return f"<Xueqiu hot follow data unavailable: {e}>"
+
+    if df is None or df.empty:
+        return "<no Xueqiu hot follow data found>"
+
+    lines = [
+        f"## Xueqiu Hot Follow Ranking (雪球关注热度排行):",
+        f"Top {min(limit, len(df))} most followed stocks on Xueqiu:\n",
+    ]
+    for _, row in df.head(limit).iterrows():
+        code = str(row.get("股票代码", "?"))
+        name = str(row.get("股票简称", "?"))
+        followers = row.get("关注", "?")
+        latest_price = row.get("最新价", "?")
+        lines.append(
+            f"  {code} {name} | 关注:{followers} | 最新价:{latest_price}"
+        )
+
+    return "\n".join(lines)
