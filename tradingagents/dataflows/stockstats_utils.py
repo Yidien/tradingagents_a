@@ -63,7 +63,7 @@ def load_ohlcv(symbol: str, curr_date: str) -> pd.DataFrame:
 def _is_a_share_code(symbol: str) -> bool:
     """Return True if *symbol* looks like an A-share ticker code."""
     code = symbol.upper().strip()
-    if code.endswith(".SH") or code.endswith(".SZ"):
+    if code.endswith((".SH", ".SZ", ".SS")):
         return True
     return code.isdigit() and len(code) == 6
 
@@ -73,8 +73,8 @@ def _load_ohlcv_akshare(symbol: str, curr_date: str) -> pd.DataFrame:
     import akshare as ak
 
     code = symbol.upper().strip()
-    if code.endswith(".SH") or code.endswith(".SZ"):
-        code = code[:6]
+    if code.endswith((".SH", ".SZ", ".SS")):
+        code = code[:-3]
     # Sina prefix format
     sina_code = f"sh{code}" if code.startswith("6") else f"sz{code}"
 

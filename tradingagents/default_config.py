@@ -131,6 +131,7 @@ DEFAULT_CONFIG = _apply_env_overrides({
         ".AX":  "^AXJO",    # Australia (ASX 200)
         ".SH":  "000300",   # Shanghai → CSI 300 (沪深300)
         ".SZ":  "000300",   # Shenzhen → CSI 300 (沪深300)
+        ".SS":  "000300",   # Shanghai (Yahoo/Bloomberg suffix) → CSI 300
         "":     "SPY",      # default for US-listed tickers (no suffix)
     },
 })

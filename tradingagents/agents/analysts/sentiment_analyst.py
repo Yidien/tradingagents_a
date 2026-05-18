@@ -39,8 +39,9 @@ def _seven_days_back(trade_date: str) -> str:
 def _is_a_share_ticker(ticker: str) -> bool:
     """Return True if *ticker* is an A-share (Shanghai/Shenzhen) code."""
     code = ticker.upper().strip()
-    if code.endswith(".SH") or code.endswith(".SZ"):
+    if code.endswith((".SH", ".SZ", ".SS")):
         return True
+    # Also match bare 6-digit codes
     return code.isdigit() and len(code) == 6
 
 

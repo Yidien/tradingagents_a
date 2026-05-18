@@ -36,11 +36,13 @@ def _normalise_ticker(symbol: str) -> str:
     """Strip exchange suffix so we get a clean 6-digit A-share code.
 
     ``600519.SH`` → ``600519``, ``000001.SZ`` → ``000001``.
+    Also handles Yahoo/Bloomberg suffixes: ``.SS`` → Shanghai, ``.SZ`` → Shenzhen.
     Non-A-share tickers are returned unchanged.
     """
     upper = symbol.upper().strip()
-    if upper.endswith(".SH") or upper.endswith(".SZ"):
-        return upper[:6]
+    for suffix in (".SH", ".SZ", ".SS"):
+        if upper.endswith(suffix):
+            return upper[:-len(suffix)]
     return upper
 
 
@@ -171,9 +173,23 @@ def get_akshare_data_online(
             )
 
     if df is None or df.empty:
-        return (
-            f"No data found for symbol '{symbol}' between {start_date} and {end_date}"
-        )
+        # Try expanding end_date back up to 10 days to find nearest trading day
+        end_dt = parse_date(end_date)
+        for back in range(1, 11):
+            new_end = (end_dt - timedelta(days=back)).strftime("%Y-%m-%d")
+            logger.info("No data for %s on %s, trying %s", symbol, end_date, new_end)
+            try:
+                df = _try_fetch_ohlcv(code, start_date, new_end)
+                if df is not None and not df.empty:
+                    end_date = new_end
+                    break
+            except Exception:
+                continue
+        else:
+            return (
+                f"No data found for symbol '{symbol}' between {start_date} and {end_date} "
+                f"(checked up to {new_end} - all dates are non-trading days)"
+            )
 
     df = df.rename(columns={k: v for k, v in col_map.items() if k in df.columns})
 
