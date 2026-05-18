@@ -161,6 +161,70 @@ def select_skip_researcher_debate() -> bool:
     return choice
 
 
+def select_skip_downstream(convince_default: bool = False) -> dict:
+    """Ask which downstream steps to skip: Trader, Risk MGMT, Portfolio Manager.
+
+    Returns dict with keys: skip_trader, skip_risk_mgmt, skip_portfolio_manager.
+    """
+    # If user already skipped debate, suggest lighter downstream
+    prefix = "是否跳过后续分析环节？" if not convince_default else "是否跳过后续环节（建议跳过以快速获取分析总结）？"
+
+    results = {}
+
+    # --- Trader ---
+    choice_trader = questionary.select(
+        f"{prefix}\n\n[Trader 交易员] 综合分析师报告生成交易计划",
+        choices=[
+            questionary.Choice("否 - 保留交易员分析（默认）", False),
+            questionary.Choice("是 - 跳过交易员", True),
+        ],
+        instruction="\n- 使用方向键导航\n- 按回车选择",
+        style=questionary.Style(
+            [
+                ("selected", "fg:yellow noinherit"),
+                ("highlighted", "fg:yellow noinherit"),
+            ],
+        ),
+    ).ask()
+    results["skip_trader"] = choice_trader
+
+    # --- Risk MGMT ---
+    choice_risk = questionary.select(
+        "[风险管理] Aggressive/Conservative/Neutral 三方辩论 + 风险评估",
+        choices=[
+            questionary.Choice("否 - 保留风险管理（默认）", False),
+            questionary.Choice("是 - 跳过风险管理", True),
+        ],
+        instruction="\n- 使用方向键导航\n- 按回车选择",
+        style=questionary.Style(
+            [
+                ("selected", "fg:yellow noinherit"),
+                ("highlighted", "fg:yellow noinherit"),
+            ],
+        ),
+    ).ask()
+    results["skip_risk_mgmt"] = choice_risk
+
+    # --- Portfolio Manager ---
+    choice_pm = questionary.select(
+        "[投资组合经理] 最终审批交易决策",
+        choices=[
+            questionary.Choice("否 - 保留PM审批（默认）", False),
+            questionary.Choice("是 - 跳过PM审批（输出风控/分析总结）", True),
+        ],
+        instruction="\n- 使用方向键导航\n- 按回车选择",
+        style=questionary.Style(
+            [
+                ("selected", "fg:yellow noinherit"),
+                ("highlighted", "fg:yellow noinherit"),
+            ],
+        ),
+    ).ask()
+    results["skip_portfolio_manager"] = choice_pm
+
+    return results
+
+
 def _fetch_openrouter_models() -> List[Tuple[str, str]]:
     """Fetch available models from the OpenRouter API."""
     import requests

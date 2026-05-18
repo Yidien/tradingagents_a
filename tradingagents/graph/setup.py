@@ -20,6 +20,9 @@ class GraphSetup:
         tool_nodes: Dict[str, ToolNode],
         conditional_logic: ConditionalLogic,
         skip_researcher_debate: bool = False,
+        skip_trader: bool = False,
+        skip_risk_mgmt: bool = False,
+        skip_portfolio_manager: bool = False,
     ):
         """使用必需组件进行初始化。"""
         self.quick_thinking_llm = quick_thinking_llm
@@ -27,6 +30,9 @@ class GraphSetup:
         self.tool_nodes = tool_nodes
         self.conditional_logic = conditional_logic
         self.skip_researcher_debate = skip_researcher_debate
+        self.skip_trader = skip_trader
+        self.skip_risk_mgmt = skip_risk_mgmt
+        self.skip_portfolio_manager = skip_portfolio_manager
 
     def setup_graph(
         self, selected_analysts=["market", "social", "news", "fundamentals"]
@@ -102,16 +108,19 @@ class GraphSetup:
             )
             workflow.add_node(f"tools_{analyst_type}", tool_nodes[analyst_type])
 
-        # 添加其他节点
+        # 添加其他节点（条件添加）
         if not self.skip_researcher_debate:
             workflow.add_node("Bull Researcher", bull_researcher_node)
             workflow.add_node("Bear Researcher", bear_researcher_node)
         workflow.add_node("Research Manager", research_manager_node)
-        workflow.add_node("Trader", trader_node)
-        workflow.add_node("Aggressive Analyst", aggressive_analyst)
-        workflow.add_node("Neutral Analyst", neutral_analyst)
-        workflow.add_node("Conservative Analyst", conservative_analyst)
-        workflow.add_node("Portfolio Manager", portfolio_manager_node)
+        if not self.skip_trader:
+            workflow.add_node("Trader", trader_node)
+        if not self.skip_risk_mgmt:
+            workflow.add_node("Aggressive Analyst", aggressive_analyst)
+            workflow.add_node("Neutral Analyst", neutral_analyst)
+            workflow.add_node("Conservative Analyst", conservative_analyst)
+        if not self.skip_portfolio_manager:
+            workflow.add_node("Portfolio Manager", portfolio_manager_node)
 
         # 定义边
         # 从第一个分析师开始
@@ -162,33 +171,54 @@ class GraphSetup:
                 },
             )
 
-        workflow.add_edge("Research Manager", "Trader")
-        workflow.add_edge("Trader", "Aggressive Analyst")
-        workflow.add_conditional_edges(
-            "Aggressive Analyst",
-            self.conditional_logic.should_continue_risk_analysis,
-            {
-                "Conservative Analyst": "Conservative Analyst",
-                "Portfolio Manager": "Portfolio Manager",
-            },
-        )
-        workflow.add_conditional_edges(
-            "Conservative Analyst",
-            self.conditional_logic.should_continue_risk_analysis,
-            {
-                "Neutral Analyst": "Neutral Analyst",
-                "Portfolio Manager": "Portfolio Manager",
-            },
-        )
-        workflow.add_conditional_edges(
-            "Neutral Analyst",
-            self.conditional_logic.should_continue_risk_analysis,
-            {
-                "Aggressive Analyst": "Aggressive Analyst",
-                "Portfolio Manager": "Portfolio Manager",
-            },
-        )
+        # --- Post-Research-Manager routing ---
+        if self.skip_trader and self.skip_risk_mgmt:
+            # Everything after Research Manager is skipped → analyst summary only
+            workflow.add_edge("Research Manager", END)
+        elif self.skip_trader:
+            # Skip trader, go directly to risk management
+            workflow.add_edge("Research Manager", "Aggressive Analyst")
+        else:
+            workflow.add_edge("Research Manager", "Trader")
 
-        workflow.add_edge("Portfolio Manager", END)
+        # --- Post-Trader routing ---
+        if not self.skip_trader:
+            if self.skip_risk_mgmt:
+                workflow.add_edge("Trader", END)
+            else:
+                workflow.add_edge("Trader", "Aggressive Analyst")
+
+        # --- Risk management debate (仅在未跳过时) ---
+        if not self.skip_risk_mgmt:
+            # When PM is skipped, risk debaters route directly to END
+            risk_next = "Portfolio Manager" if not self.skip_portfolio_manager else END
+            workflow.add_conditional_edges(
+                "Aggressive Analyst",
+                self.conditional_logic.should_continue_risk_analysis,
+                {
+                    "Conservative Analyst": "Conservative Analyst",
+                    risk_next: risk_next,
+                },
+            )
+            workflow.add_conditional_edges(
+                "Conservative Analyst",
+                self.conditional_logic.should_continue_risk_analysis,
+                {
+                    "Neutral Analyst": "Neutral Analyst",
+                    risk_next: risk_next,
+                },
+            )
+            workflow.add_conditional_edges(
+                "Neutral Analyst",
+                self.conditional_logic.should_continue_risk_analysis,
+                {
+                    "Aggressive Analyst": "Aggressive Analyst",
+                    risk_next: risk_next,
+                },
+            )
+
+        # --- Portfolio Manager → END ---
+        if not self.skip_portfolio_manager:
+            workflow.add_edge("Portfolio Manager", END)
 
         return workflow

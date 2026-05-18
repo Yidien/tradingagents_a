@@ -18,6 +18,9 @@ _ENV_OVERRIDES = {
     "TRADINGAGENTS_CHECKPOINT_ENABLED":   "checkpoint_enabled",
     "TRADINGAGENTS_BENCHMARK_TICKER":     "benchmark_ticker",
     "TRADINGAGENTS_SKIP_RESEARCHER_DEBATE": "skip_researcher_debate",
+    "TRADINGAGENTS_SKIP_TRADER":           "skip_trader",
+    "TRADINGAGENTS_SKIP_RISK_MGMT":        "skip_risk_mgmt",
+    "TRADINGAGENTS_SKIP_PORTFOLIO_MGR":    "skip_portfolio_manager",
 }
 
 
@@ -80,6 +83,19 @@ DEFAULT_CONFIG = _apply_env_overrides({
     # LLM calls and reducing analysis time. Useful for quick
     # screening or when debate adds limited value.
     "skip_researcher_debate": False,
+    # Skip the Trader agent synthesis step. When True, the Research
+    # Manager output feeds directly into risk management (or portfolio
+    # manager if risk is also skipped).
+    "skip_trader": False,
+    # Skip all three risk management debaters (Aggressive/Conservative/
+    # Neutral) AND the Portfolio Manager final approval. When True,
+    # the flow ends after Trader (or Research Manager if trader is
+    # also skipped), outputting the analyst summary directly.
+    "skip_risk_mgmt": False,
+    # Skip only the Portfolio Manager final approval step. Risk
+    # management still runs. The final output is the aggregate
+    # risk analysis without a formal PM sign-off.
+    "skip_portfolio_manager": False,
     # News / data fetching parameters
     # Increase for longer lookback strategies or to broaden macro coverage;
     # decrease to reduce token usage in agent prompts.

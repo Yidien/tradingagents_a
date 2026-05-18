@@ -115,6 +115,9 @@ class TradingAgentsGraph:
             self.tool_nodes,
             self.conditional_logic,
             skip_researcher_debate=self.config.get("skip_researcher_debate", False),
+            skip_trader=self.config.get("skip_trader", False),
+            skip_risk_mgmt=self.config.get("skip_risk_mgmt", False),
+            skip_portfolio_manager=self.config.get("skip_portfolio_manager", False),
         )
 
         self.propagator = Propagator(

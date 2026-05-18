@@ -558,6 +558,17 @@ def get_user_selections():
     if selected_skip_debate:
         console.print("[yellow]已选择跳过牛熊辩论[/yellow]")
 
+    # Step 5.6: Skip downstream steps?
+    downstream = select_skip_downstream(convince_default=selected_skip_debate)
+    skipped_parts = []
+    if downstream["skip_trader"]: skipped_parts.append("交易员")
+    if downstream["skip_risk_mgmt"]: skipped_parts.append("风险管理")
+    if downstream["skip_portfolio_manager"]: skipped_parts.append("PM审批")
+    if skipped_parts:
+        console.print(f"[yellow]已选择跳过: {', '.join(skipped_parts)}[/yellow]")
+    if all(downstream.values()):
+        console.print("[cyan]所有后续环节已跳过，将输出分析师团队总结[/cyan]")
+
     # Step 6: LLM Provider
     console.print(
         create_question_box(
@@ -632,6 +643,9 @@ def get_user_selections():
         "analysts": selected_analysts,
         "research_depth": selected_research_depth,
         "skip_researcher_debate": selected_skip_debate,
+        "skip_trader": downstream["skip_trader"],
+        "skip_risk_mgmt": downstream["skip_risk_mgmt"],
+        "skip_portfolio_manager": downstream["skip_portfolio_manager"],
         "llm_provider": selected_llm_provider.lower(),
         "backend_url": backend_url,
         "shallow_thinker": selected_shallow_thinker,
@@ -985,6 +999,9 @@ def run_analysis(checkpoint: bool = False):
     config["max_debate_rounds"] = selections["research_depth"]
     config["max_risk_discuss_rounds"] = selections["research_depth"]
     config["skip_researcher_debate"] = selections.get("skip_researcher_debate", False)
+    config["skip_trader"] = selections.get("skip_trader", False)
+    config["skip_risk_mgmt"] = selections.get("skip_risk_mgmt", False)
+    config["skip_portfolio_manager"] = selections.get("skip_portfolio_manager", False)
     config["quick_think_llm"] = selections["shallow_thinker"]
     config["deep_think_llm"] = selections["deep_thinker"]
     config["backend_url"] = selections["backend_url"]
