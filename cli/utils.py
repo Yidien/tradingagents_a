@@ -133,14 +133,30 @@ def select_research_depth() -> int:
             [
                 ("selected", "fg:yellow noinherit"),
                 ("highlighted", "fg:yellow noinherit"),
-                ("pointer", "fg:yellow noinherit"),
-            ]
-        ),
+
+        ],
+    ),
     ).ask()
 
-    if choice is None:
-        console.print("\n[red]未选择研究深度，退出中...[/red]")
-        exit(1)
+    return choice
+
+
+def select_skip_researcher_debate() -> bool:
+    """Ask whether to skip the Bull/Bear researcher debate."""
+    choice = questionary.select(
+        "是否跳过牛熊研究员辩论？（跳过可节省约40%的分析时间和LLM调用）",
+        choices=[
+            questionary.Choice("否 - 保留辩论（默认，更全面）", False),
+            questionary.Choice("是 - 跳过辩论（更快，省Token）", True),
+        ],
+        instruction="\n- 使用方向键导航\n- 按回车选择",
+        style=questionary.Style(
+            [
+                ("selected", "fg:yellow noinherit"),
+                ("highlighted", "fg:yellow noinherit"),
+            ],
+        ),
+    ).ask()
 
     return choice
 
