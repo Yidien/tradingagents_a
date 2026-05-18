@@ -17,6 +17,7 @@ _ENV_OVERRIDES = {
     "TRADINGAGENTS_MAX_RISK_ROUNDS":      "max_risk_discuss_rounds",
     "TRADINGAGENTS_CHECKPOINT_ENABLED":   "checkpoint_enabled",
     "TRADINGAGENTS_BENCHMARK_TICKER":     "benchmark_ticker",
+    "TRADINGAGENTS_SKIP_RESEARCHER_DEBATE": "skip_researcher_debate",
 }
 
 
@@ -74,6 +75,11 @@ DEFAULT_CONFIG = _apply_env_overrides({
     "max_debate_rounds": 1,
     "max_risk_discuss_rounds": 1,
     "max_recur_limit": 100,
+    # When True, skip the Bull/Bear researcher debate entirely.
+    # Analyst reports go directly to the Research Manager, saving
+    # LLM calls and reducing analysis time. Useful for quick
+    # screening or when debate adds limited value.
+    "skip_researcher_debate": False,
     # News / data fetching parameters
     # Increase for longer lookback strategies or to broaden macro coverage;
     # decrease to reduce token usage in agent prompts.

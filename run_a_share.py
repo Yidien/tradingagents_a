@@ -40,6 +40,7 @@ config.update({
     # === LLM 配置（从 .env 读取，这里设默认） ===
     "output_language": "Chinese",
     "max_debate_rounds": 1,
+    "skip_researcher_debate": False,  # 设为 True 跳过牛熊辩论，节省时间
 })
 
 # 👇 修改这里分析你关注的 A 股
