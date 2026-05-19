@@ -1243,7 +1243,10 @@ def run_analysis(checkpoint: bool = False):
         final_state = {}
         for chunk in trace:
             final_state.update(chunk)
-        decision = graph.process_signal(final_state["final_trade_decision"])
+        decision_raw = final_state.get("final_trade_decision",
+            final_state.get("research_manager_decision",
+            "## Analyst Summary\n\n(All downstream steps skipped — analyst reports below)"))
+        decision = graph.process_signal(decision_raw)
 
         # Update all agent statuses to completed
         for agent in message_buffer.agent_status:

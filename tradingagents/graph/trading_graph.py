@@ -373,7 +373,8 @@ class TradingAgentsGraph:
         self.memory_log.store_decision(
             ticker=company_name,
             trade_date=trade_date,
-            final_trade_decision=final_state["final_trade_decision"],
+            final_trade_decision=final_state.get("final_trade_decision",
+                final_state.get("research_manager_decision", "No decision — analyst summary only")),
         )
 
         # Clear checkpoint on successful completion to avoid stale state.
@@ -382,39 +383,55 @@ class TradingAgentsGraph:
                 self.config["data_cache_dir"], company_name, str(trade_date)
             )
 
-        return final_state, self.process_signal(final_state["final_trade_decision"])
+        decision_raw = final_state.get("final_trade_decision",
+            final_state.get("research_manager_decision",
+            "# Analyst Summary\n\n(All downstream steps skipped — see analyst reports below)"))
+        return final_state, self.process_signal(decision_raw)
 
     def _log_state(self, trade_date, final_state):
         """Log the final state to a JSON file."""
-        self.log_states_dict[str(trade_date)] = {
+        # Build log dict, skipping fields that don't exist (e.g. when steps are skipped)
+        log_entry = {
             "company_of_interest": final_state["company_of_interest"],
             "trade_date": final_state["trade_date"],
-            "market_report": final_state["market_report"],
-            "sentiment_report": final_state["sentiment_report"],
-            "news_report": final_state["news_report"],
-            "fundamentals_report": final_state["fundamentals_report"],
-            "investment_debate_state": {
-                "bull_history": final_state["investment_debate_state"]["bull_history"],
-                "bear_history": final_state["investment_debate_state"]["bear_history"],
-                "history": final_state["investment_debate_state"]["history"],
-                "current_response": final_state["investment_debate_state"][
-                    "current_response"
-                ],
-                "judge_decision": final_state["investment_debate_state"][
-                    "judge_decision"
-                ],
-            },
-            "trader_investment_decision": final_state["trader_investment_plan"],
-            "risk_debate_state": {
-                "aggressive_history": final_state["risk_debate_state"]["aggressive_history"],
-                "conservative_history": final_state["risk_debate_state"]["conservative_history"],
-                "neutral_history": final_state["risk_debate_state"]["neutral_history"],
-                "history": final_state["risk_debate_state"]["history"],
-                "judge_decision": final_state["risk_debate_state"]["judge_decision"],
-            },
-            "investment_plan": final_state["investment_plan"],
-            "final_trade_decision": final_state["final_trade_decision"],
         }
+        # Analyst reports
+        for key in ("market_report", "sentiment_report", "news_report", "fundamentals_report"):
+            if key in final_state:
+                log_entry[key] = final_state[key]
+
+        # Debate state (may not exist when skipped)
+        if "investment_debate_state" in final_state:
+            ids = final_state["investment_debate_state"]
+            log_entry["investment_debate_state"] = {
+                "bull_history": ids.get("bull_history"),
+                "bear_history": ids.get("bear_history"),
+                "history": ids.get("history"),
+                "current_response": ids.get("current_response"),
+                "judge_decision": ids.get("judge_decision"),
+            }
+
+        if "trader_investment_plan" in final_state:
+            log_entry["trader_investment_decision"] = final_state["trader_investment_plan"]
+
+        if "risk_debate_state" in final_state:
+            rds = final_state["risk_debate_state"]
+            log_entry["risk_debate_state"] = {
+                "aggressive_history": rds.get("aggressive_history"),
+                "conservative_history": rds.get("conservative_history"),
+                "neutral_history": rds.get("neutral_history"),
+                "history": rds.get("history"),
+                "judge_decision": rds.get("judge_decision"),
+            }
+
+        if "investment_plan" in final_state:
+            log_entry["investment_plan"] = final_state["investment_plan"]
+        if "final_trade_decision" in final_state:
+            log_entry["final_trade_decision"] = final_state["final_trade_decision"]
+        elif "research_manager_decision" in final_state:
+            log_entry["research_manager_decision"] = final_state["research_manager_decision"]
+
+        self.log_states_dict[str(trade_date)] = log_entry
 
         # Save to file. Reject ticker values that would escape the
         # results directory when joined as a path component.
